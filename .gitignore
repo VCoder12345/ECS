@@ -1,0 +1,78 @@
+# ==========================
+# CMake build files
+# ==========================
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+.cache/
+
+
+# CMake presets user overrides
+CMakeUserPresets.json
+
+# ==========================
+# Compiled binaries
+# ==========================
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# Object files
+*.o
+*.obj
+
+# ==========================
+# CMake FetchContent
+# ==========================
+# Dependencies downloaded/built by CMake
+_deps/
+
+# ==========================
+# IDE/editor files
+# ==========================
+
+# VS Code
+.vscode/
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# CLion
+.idea/
+
+# Vim/Neovim
+*.swp
+*.swo
+*.swn
+
+# ==========================
+# OS files
+# ==========================
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# ==========================
+# Logs/temp files
+# ==========================
+
+*.log
+*.tmp
+*.bak
