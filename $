@@ -1,0 +1,32 @@
+#pragma once
+
+#include <ecs/Utility.h>
+#include <ecs/Archetype.h>
+#include <memory>
+#include <unordered_map>
+
+class World {
+public:
+  int counter = 0;
+
+  Entity createEntity();
+
+  template<typename... CompTypes>
+  ComponentMask getMaskFromCompTypes() {
+    ComponentMask mask;
+    (mask.set(getComponentID<CompTypes>()),...);
+
+    return mask;
+  }
+
+  template<typename... CompTypes>
+  void addComponentsToEntity(Entity e, CompTypes&&... comps) {
+    ComponentMask mask = getMaskFromCompTypes<CompTypes...>();
+
+
+  }
+
+private:
+  std::unordered_map<ComponentMask, std::unique_ptr<ArchetypeBase>> archetypes;
+};
+

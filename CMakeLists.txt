@@ -10,7 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BUILD_TESTS "Build the tests" ON)
 
-add_library(ecs STATIC src/ECS.cpp)
+add_library(ecs STATIC src/World.cpp)
 
 target_include_directories(ecs PUBLIC include)
 
