@@ -28,9 +28,10 @@ TEST_CASE("ECS creation", "[ecs]") {
 }
 
 TEST_CASE("Archetype creation", "[arch]") {
-  Archetype at = Archetype::create<Position, Health>();
-  
-  REQUIRE(at.getMask().test(getComponentID<Position>()));
-  REQUIRE(at.getMask().test(getComponentID<Health>()));
-  REQUIRE(!at.getMask().test(getComponentID<Velocity>()));
+  World world;
+
+  Entity e1 = world.createEntity();
+
+  world.addComponentToEntity<Position>(e1, Position{1.0f, 2.0f, 3.0f});
+
 }

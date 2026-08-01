@@ -9,6 +9,11 @@ using Entity = uint32_t;
 using ComponentID = uint32_t;
 using ComponentMask = std::bitset<ECS_MAX_COMPONENTS>;
 
+inline ComponentMask emptyCompMask() {
+  ComponentMask mask;
+  return mask;
+}
+
 inline ComponentID getNextComponentID() {
   static ComponentID id = 0;
   return id++;
