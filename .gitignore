@@ -10,6 +10,7 @@ install_manifest.txt
 compile_commands.json
 
 .cache/
+.last_exe
 
 
 # CMake presets user overrides
