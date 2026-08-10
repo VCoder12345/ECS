@@ -1,5 +1,6 @@
 #include <ecs/World.h>
 
+//TODO: replace counter by the size of the entityToAtIdMap
 Entity World::createEntity() { 
   //let the entity be part of the empty archetype
   Entity newEntity = counter;

@@ -5,6 +5,7 @@
 #include <new>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
 
 class ComponentOps {
 public:
@@ -192,6 +193,8 @@ public:
   //assumes that oAt was created from the archetype, so that only the last column differs
   void swapAndPopColsInto(Entity e, Archetype& oAt) {
     assert(columns.size() < oAt.columns.size());
+    assert(entities.size() > 0);
+
     size_t index = entityColumnMap[e];
 
     for (size_t i = 0; i < columns.size(); ++i) {
@@ -200,7 +203,7 @@ public:
 
     entityColumnMap.erase(e);
 
-    if (index < entities.size() - 1) {
+    if (index + 1 < entities.size()) {
       Entity lastEntity = entities.back();
       entityColumnMap[lastEntity] = index;
       entities[index] = lastEntity;
