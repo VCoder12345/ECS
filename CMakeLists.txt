@@ -14,6 +14,7 @@ add_library(ecs STATIC src/World.cpp)
 
 target_include_directories(ecs PUBLIC include)
 
+
 if(BUILD_TESTS)
   # include(CTest)
   # enable_testing()

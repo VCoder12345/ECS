@@ -2,14 +2,14 @@
 
 #include <cassert>
 #include <ecs/Utility.h>
+#include <iostream>
 #include <new>
 #include <unordered_map>
 #include <vector>
-#include <iostream>
 
 class ComponentOps {
 public:
-  void (*move)(void *, void *);
+  void (*moveConstruct)(void *, void *);
   void (*destroy)(void *);
 
   template <typename T> static ComponentOps create() {
@@ -42,7 +42,8 @@ public:
 
   Column(Column &&other) noexcept
       : data(other.data), size(other.size), capacity(other.capacity),
-        elementSize(other.elementSize), alignment(other.alignment) {
+        elementSize(other.elementSize), alignment(other.alignment),
+        ops(other.ops) {
     other.data = nullptr;
     other.size = 0;
     other.capacity = 0;
@@ -58,6 +59,7 @@ public:
       capacity = other.capacity;
       elementSize = other.elementSize;
       alignment = other.alignment;
+      ops = other.ops;
       other.data = nullptr;
       other.size = 0;
       other.capacity = 0;
@@ -67,6 +69,12 @@ public:
 
   ~Column() {
     if (data) {
+      char *loc = static_cast<char *>(data);
+      for (size_t i = 0; i < size; ++i) {
+        ops.destroy(loc);
+        loc += elementSize;
+      }
+
       ::operator delete(data, std::align_val_t(alignment));
     }
   }
@@ -78,28 +86,34 @@ public:
 
     col.data = ::operator new(col.capacity * col.elementSize,
                               std::align_val_t(col.alignment));
+    col.ops = ops;
+
     return col;
   }
 
   void swapAndPopInto(uint16_t index, Column &oCol) {
     assert(data != nullptr && oCol.data != nullptr);
-    assert(index < size && oCol.size > 0);
+    assert(index < size && size > 0);
 
     char *loc = static_cast<char *>(data) + index * elementSize;
-    char* newLoc = oCol.accomodateNewElement();
+    char *newLoc = oCol.allocateSlot();
 
-    ops.move(loc, newLoc);
+    ops.moveConstruct(loc, newLoc);
     ops.destroy(loc);
+    oCol.size++;
 
     if (index < size - 1) {
-      char* lastLoc = static_cast<char*>(data) + (size - 1) * elementSize;
-      ops.move(lastLoc, loc);
+      char *lastLoc = static_cast<char *>(data) + (size - 1) * elementSize;
+      ops.moveConstruct(lastLoc, loc);
       ops.destroy(lastLoc);
     }
     --size;
   }
 
-  char* accomodateNewElement() {
+  // makes sure that there is enough space for a new element, and returns the
+  // location of the new element Note that it does not increment the size of the
+  // column, that is the responsibility of the caller
+  char *allocateSlot() {
     if (size >= capacity) {
       capacity *= 2;
 
@@ -109,7 +123,7 @@ public:
       char *oldLoc = (char *)data;
       char *newLoc = (char *)newData;
       for (size_t i = 0; i < size; ++i) {
-        ops.move(oldLoc, newLoc); 
+        ops.moveConstruct(oldLoc, newLoc);
         ops.destroy(oldLoc);
 
         if (i < size - 1) {
@@ -118,12 +132,26 @@ public:
         }
       }
 
-      operator delete(data);
+      ::operator delete(data, std::align_val_t(alignment));
       data = newData;
     }
+
+    return (char *)data + size * elementSize;
+  }
+
+  template <typename T, typename... Args> T &emplace(Args &&...args) {
+    assert(sizeof(T) == elementSize);
+    assert(alignof(T) == alignment);
+
+    char *loc = allocateSlot();
+    T *result = new (loc) T(std::forward<Args>(args)...);
     ++size;
 
-    return (char*)data + (size - 1) * elementSize;
+    return *result;
+  }
+
+  template <typename T> T &get(size_t index) {
+    return *reinterpret_cast<T *>((char *)data + index * elementSize);
   }
 
 private:
@@ -139,7 +167,6 @@ private:
 
 class Archetype {
 public:
-
   template <typename... CompTypes> static Archetype create() {
     Archetype archetype;
 
@@ -181,17 +208,24 @@ public:
     return archetype;
   }
 
-  size_t getColumnIndex(Entity e) {
-    return entityColumnMap[e];
-  }
+  size_t getColumnIndex(Entity e) { return entityColumnMap[e]; }
 
   void addEntity(Entity e) {
-    entityColumnMap.insert({ e, columns.size() - 1 });
+    entityColumnMap.insert({e, entities.size()});
     entities.push_back(e);
   }
 
-  //assumes that oAt was created from the archetype, so that only the last column differs
-  void swapAndPopColsInto(Entity e, Archetype& oAt) {
+  // TODO: add error handling for non-existent entity or component
+  template <typename T> T &getComponent(Entity e) {
+    size_t index = entityColumnMap[e];
+    Column &col = columns[compColumnMap[getComponentID<T>()]];
+
+    return col.get<T>(index);
+  }
+
+  // assumes that oAt was created from the archetype, so that only the last
+  // column differs
+  void swapAndPopColsInto(Entity e, Archetype &oAt) {
     assert(columns.size() < oAt.columns.size());
     assert(entities.size() > 0);
 
@@ -212,6 +246,13 @@ public:
 
     oAt.addEntity(e);
   }
+
+  template <typename T, typename... Args>
+  T &addDataToLastColumn(Args &&...args) {
+    return columns.back().emplace<T>(std::forward<Args>(args)...);
+  }
+
+  std::vector<Entity> &getEntities() { return entities; }
 
 private:
   ComponentMask mask;

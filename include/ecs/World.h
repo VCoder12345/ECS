@@ -15,25 +15,43 @@ public:
 
   Entity createEntity();
 
-  template <typename T> void addComponentToEntity(Entity e, T &&component) {
+  template <typename T>
+  T& getComponent(Entity e) {
+    Archetype& at = getArchetypeForEntity(e);
+    return at.getComponent<T>(e);
+  }
+
+  template <typename T, typename... Args>
+  T &addComponentToEntity(Entity e, Args &&...args) {
     size_t oldAtId = entityToAtIdMap[e];
-    Archetype &oldAt = archetypes[oldAtId];
-    const ComponentMask &oldMask = oldAt.getMask();
+    const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);
     newMask.set(getComponentID<T>());
 
-    size_t newAtId = maskToAtIdMap[newMask];
-    if (newAtId == 0) {
+    auto it = maskToAtIdMap.find(newMask);
+
+    size_t newAtId;
+    if (it == maskToAtIdMap.end()) {
       // the archetype doesn't exist yet
-      archetypes.emplace_back(oldAt.createAndAddComp<T>(newMask));
-      maskToAtIdMap.insert({newMask, archetypes.size() - 1});
+      archetypes.emplace_back(archetypes[oldAtId].createAndAddComp<T>(newMask));
       newAtId = archetypes.size() - 1;
+      maskToAtIdMap.insert({newMask, newAtId});
+    } else {
+      // the archetype already exists
+      newAtId = it->second;
     }
 
-    Archetype &newAt = archetypes[newAtId];
-    oldAt.swapAndPopColsInto(e, newAt);
+    archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
 
     entityToAtIdMap[e] = newAtId;
+
+    return archetypes[newAtId].addDataToLastColumn<T>(
+        std::forward<Args>(args)...);
+  }
+
+  Archetype &getArchetypeForEntity(Entity e) {
+    size_t atId = entityToAtIdMap[e];
+    return archetypes[atId];
   }
 
 private:
