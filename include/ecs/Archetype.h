@@ -22,9 +22,12 @@ public:
 
 class Column {
 public:
+  ComponentID compId;
+
   template <typename T> static Column create() {
     Column column;
 
+    column.compId = getComponentID<T>();
     column.elementSize = sizeof(T);
     column.alignment = alignof(T);
     column.size = 0;
@@ -43,10 +46,11 @@ public:
   Column(Column &&other) noexcept
       : data(other.data), size(other.size), capacity(other.capacity),
         elementSize(other.elementSize), alignment(other.alignment),
-        ops(other.ops) {
+        ops(other.ops), compId(other.compId) {
     other.data = nullptr;
     other.size = 0;
     other.capacity = 0;
+    other.compId = 0;
   }
 
   Column &operator=(Column &&other) noexcept {
@@ -54,6 +58,7 @@ public:
       if (data) {
         ::operator delete(data, std::align_val_t(alignment));
       }
+      compId = other.compId;
       data = other.data;
       size = other.size;
       capacity = other.capacity;
@@ -63,6 +68,7 @@ public:
       other.data = nullptr;
       other.size = 0;
       other.capacity = 0;
+      other.compId = 0;
     }
     return *this;
   }
@@ -81,6 +87,7 @@ public:
 
   Column copyStructureToEmptyColumn() const {
     Column col;
+    col.compId = compId;
     col.elementSize = elementSize;
     col.alignment = alignment;
 
@@ -232,7 +239,10 @@ public:
     size_t index = entityColumnMap[e];
 
     for (size_t i = 0; i < columns.size(); ++i) {
-      columns[i].swapAndPopInto(index, oAt.columns[i]);
+      auto it = oAt.compColumnMap.find(columns[i].compId);
+      assert(it != oAt.compColumnMap.end());
+      size_t oColIndex = it->second;
+      columns[i].swapAndPopInto(index, oAt.columns[oColIndex]);
     }
 
     entityColumnMap.erase(e);
@@ -247,9 +257,13 @@ public:
     oAt.addEntity(e);
   }
 
-  template <typename T, typename... Args>
-  T &addDataToLastColumn(Args &&...args) {
-    return columns.back().emplace<T>(std::forward<Args>(args)...);
+  template <typename T, typename... Args> T &addDataToColumn(Args &&...args) {
+    ComponentID id = getComponentID<T>();
+    assert(compColumnMap.find(id) != compColumnMap.end());
+    assert(mask.test(id));
+
+    size_t colIndex = compColumnMap[id];
+    return columns[colIndex].emplace<T>(std::forward<Args>(args)...);
   }
 
   std::vector<Entity> &getEntities() { return entities; }

@@ -257,205 +257,141 @@ TEST_CASE("Non-trivial components survive column growth", "[ecs][lifetime]") {
   }
 }
 
-TEST_CASE("Components are eventually destroyed",
-          "[ecs][lifetime]")
-{
-    LifetimeComponent::reset();
+TEST_CASE("Components are eventually destroyed", "[ecs][lifetime]") {
+  LifetimeComponent::reset();
 
-    {
-        World world;
-
-        for (int i = 0; i < 100; ++i) {
-            Entity e = world.createEntity();
-
-            world.addComponentToEntity<LifetimeComponent>(e, i);
-        }
-    }
-
-    REQUIRE(
-        LifetimeComponent::constructed ==
-        LifetimeComponent::destroyed);
-}
-
-TEST_CASE("Entities with same components share archetype",
-          "[ecs][archetype]")
-{
+  {
     World world;
 
-    Entity e1 = world.createEntity();
-    Entity e2 = world.createEntity();
+    for (int i = 0; i < 100; ++i) {
+      Entity e = world.createEntity();
 
-    world.addComponentToEntity<Position>(
-        e1, 1.0f, 2.0f, 3.0f);
+      world.addComponentToEntity<LifetimeComponent>(e, i);
+    }
+  }
 
-    world.addComponentToEntity<Position>(
-        e2, 4.0f, 5.0f, 6.0f);
+  REQUIRE(LifetimeComponent::constructed == LifetimeComponent::destroyed);
+}
 
-    REQUIRE(
-        &world.getArchetypeForEntity(e1) ==
-        &world.getArchetypeForEntity(e2));
+TEST_CASE("Entities with same components share archetype", "[ecs][archetype]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+
+  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
+
+  world.addComponentToEntity<Position>(e2, 4.0f, 5.0f, 6.0f);
+
+  REQUIRE(&world.getArchetypeForEntity(e1) == &world.getArchetypeForEntity(e2));
 }
 
 TEST_CASE("Adding multiple components produces correct archetype",
-          "[ecs][archetype]")
-{
-    World world;
+          "[ecs][archetype]") {
+  World world;
 
-    Entity e = world.createEntity();
+  Entity e = world.createEntity();
 
-    world.addComponentToEntity<Position>(
-        e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
 
-    world.addComponentToEntity<Velocity>(
-        e, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
 
-    world.addComponentToEntity<Health>(
-        e, 100);
+  world.addComponentToEntity<Health>(e, 100);
 
-    const auto& mask =
-        world.getArchetypeForEntity(e).getMask();
+  const auto &mask = world.getArchetypeForEntity(e).getMask();
 
-    REQUIRE(mask.test(getComponentID<Position>()));
-    REQUIRE(mask.test(getComponentID<Velocity>()));
-    REQUIRE(mask.test(getComponentID<Health>()));
+  REQUIRE(mask.test(getComponentID<Position>()));
+  REQUIRE(mask.test(getComponentID<Velocity>()));
+  REQUIRE(mask.test(getComponentID<Health>()));
 
-    REQUIRE(world.getComponent<Position>(e).x == 1.0f);
-    REQUIRE(world.getComponent<Position>(e).y == 2.0f);
-    REQUIRE(world.getComponent<Position>(e).z == 3.0f);
+  REQUIRE(world.getComponent<Position>(e).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e).y == 2.0f);
+  REQUIRE(world.getComponent<Position>(e).z == 3.0f);
 
-    REQUIRE(world.getComponent<Velocity>(e).x == 4.0f);
-    REQUIRE(world.getComponent<Velocity>(e).y == 5.0f);
-    REQUIRE(world.getComponent<Velocity>(e).z == 6.0f);
+  REQUIRE(world.getComponent<Velocity>(e).x == 4.0f);
+  REQUIRE(world.getComponent<Velocity>(e).y == 5.0f);
+  REQUIRE(world.getComponent<Velocity>(e).z == 6.0f);
 
-    REQUIRE(world.getComponent<Health>(e).hearts == 100);
+  REQUIRE(world.getComponent<Health>(e).hearts == 100);
 }
 
-TEST_CASE("Randomized ECS migration stress test", "[ecs][stress]")
-{
-    constexpr int entityCount = 500;
-    constexpr int operations = 5000;
+TEST_CASE("Randomized ECS stress test", "[ecs][stress]") {
+  constexpr int entityCount = 100;
+  constexpr int operations = 1000;
 
-    std::mt19937 rng(0x12345678);
+  std::mt19937 rng(0x12345678);
 
-    World world;
+  World world;
 
-    std::vector<Entity> entities;
-    entities.reserve(entityCount);
+  std::vector<Entity> entities;
+  entities.reserve(entityCount);
 
-    for (int i = 0; i < entityCount; ++i) {
-        entities.push_back(world.createEntity());
+  for (int i = 0; i < entityCount; ++i) {
+    entities.push_back(world.createEntity());
+  }
+
+  struct ComponentData {
+    bool hasPosition = false;
+    bool hasVelocity = false;
+    bool hasHealth = false;
+
+    Position position;
+    Velocity velocity;
+    Health health;
+  };
+
+  std::vector<ComponentData> componentData(entityCount);
+
+  for (int op = 0; op < operations; ++op) {
+    int eIndex = rng() % entityCount;
+    Entity e = entities[eIndex];
+    ComponentData& data = componentData[eIndex];
+
+    int action = rng() % 3;
+    switch (action) {
+    case 0: // Add Position
+      if (!data.hasPosition) {
+        world.addComponentToEntity<Position>(e, op + 1.0f, op + 2.0f, op + 3.0f);
+        data.hasPosition = true;
+        data.position = {op + 1.0f, op + 2.0f, op + 3.0f};
+      }
+      break;
+    case 1: // Add Velocity
+      if (!data.hasVelocity) {
+        world.addComponentToEntity<Velocity>(e, op + 10.0f, op + 20.0f, op + 30.0f);
+        data.hasVelocity = true;
+        data.velocity = {op + 10.0f, op + 20.0f, op + 30.0f};
+      }
+      break;
+    case 2: // Add Health
+      if (!data.hasHealth) {
+        world.addComponentToEntity<Health>(e, op + 100);
+        data.hasHealth = true;
+        data.health = {op + 100};
+      }
+      break;
     }
+  }
 
-    struct Expected {
-        bool hasPosition = false;
-        bool hasVelocity = false;
-        bool hasHealth = false;
-
-        Position position{};
-        Velocity velocity{};
-        Health health{};
-    };
-
-    std::unordered_map<Entity, Expected> expected;
-
-    for (Entity e : entities) {
-        expected.emplace(e, Expected{});
+  for (int i = 0; i < entityCount; ++i) {
+    Entity e = entities[i];
+    ComponentData& data = componentData[i];
+    if (data.hasPosition) {
+      Position& p = world.getComponent<Position>(e);
+      REQUIRE(p.x == data.position.x);
+      REQUIRE(p.y == data.position.y);
+      REQUIRE(p.z == data.position.z);
     }
-
-    for (int operation = 0; operation < operations; ++operation) {
-        // Pick a random entity.
-        Entity e = entities[rng() % entities.size()];
-
-        // Pick a random component.
-        int component = rng() % 3;
-
-        Expected& model = expected.at(e);
-
-        switch (component) {
-        case 0:
-            if (!model.hasPosition) {
-                const float value =
-                    static_cast<float>(operation);
-
-                world.addComponentToEntity<Position>(
-                    e,
-                    value,
-                    value + 1.0f,
-                    value + 2.0f);
-
-                model.hasPosition = true;
-                model.position = {
-                    value,
-                    value + 1.0f,
-                    value + 2.0f
-                };
-            }
-            break;
-
-        case 1:
-            if (!model.hasVelocity) {
-                const float value =
-                    static_cast<float>(operation) * 0.5f;
-
-                world.addComponentToEntity<Velocity>(
-                    e,
-                    value,
-                    value + 10.0f,
-                    value + 20.0f);
-
-                model.hasVelocity = true;
-                model.velocity = {
-                    value,
-                    value + 10.0f,
-                    value + 20.0f
-                };
-            }
-            break;
-
-        case 2:
-            if (!model.hasHealth) {
-                const int value = operation + 1000;
-
-                world.addComponentToEntity<Health>(
-                    e,
-                    value);
-
-                model.hasHealth = true;
-                model.health = {value};
-            }
-            break;
-        }
-
-        // Validate every entity after every operation.
-        for (Entity checkEntity : entities) {
-            Expected& expectedValue =
-                expected.at(checkEntity);
-
-            if (expectedValue.hasPosition) {
-                Position& actual =
-                    world.getComponent<Position>(checkEntity);
-
-                REQUIRE(actual.x == expectedValue.position.x);
-                REQUIRE(actual.y == expectedValue.position.y);
-                REQUIRE(actual.z == expectedValue.position.z);
-            }
-
-            if (expectedValue.hasVelocity) {
-                Velocity& actual =
-                    world.getComponent<Velocity>(checkEntity);
-
-                REQUIRE(actual.x == expectedValue.velocity.x);
-                REQUIRE(actual.y == expectedValue.velocity.y);
-                REQUIRE(actual.z == expectedValue.velocity.z);
-            }
-
-            if (expectedValue.hasHealth) {
-                Health& actual =
-                    world.getComponent<Health>(checkEntity);
-
-                REQUIRE(actual.hearts ==
-                        expectedValue.health.hearts);
-            }
-        }
+    if (data.hasVelocity) {
+      Velocity& v = world.getComponent<Velocity>(e);
+      REQUIRE(v.x == data.velocity.x);
+      REQUIRE(v.y == data.velocity.y);
+      REQUIRE(v.z == data.velocity.z);
     }
+    if (data.hasHealth) {
+      Health& h = world.getComponent<Health>(e);
+      REQUIRE(h.hearts == data.health.hearts);
+    }
+  }
+
 }

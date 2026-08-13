@@ -45,7 +45,7 @@ public:
 
     entityToAtIdMap[e] = newAtId;
 
-    return archetypes[newAtId].addDataToLastColumn<T>(
+    return archetypes[newAtId].addDataToColumn<T>(
         std::forward<Args>(args)...);
   }
 
