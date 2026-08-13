@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
+// A struct that holds function pointers for moving and destroying components of
+// a specific type.
 class ComponentOps {
 public:
   void (*moveConstruct)(void *, void *);
@@ -20,10 +22,13 @@ public:
   }
 };
 
+// A class that represents a column of components of a specific type in an
+// archetype.
 class Column {
 public:
   ComponentID compId;
 
+  // Create a new column for components of type T.
   template <typename T> static Column create() {
     Column column;
 
@@ -85,6 +90,10 @@ public:
     }
   }
 
+  // Create a new column with the same structure (type, size, alignment) but no
+  // data. Note that the capacity of the new column is not the same as the
+  // original column, it is initialized to 16.
+  // And the size of the new column is 0.
   Column copyStructureToEmptyColumn() const {
     Column col;
     col.compId = compId;
@@ -98,6 +107,8 @@ public:
     return col;
   }
 
+  // Move the element at index from this column to the other column, and remove
+  // it
   void swapAndPopInto(uint16_t index, Column &oCol) {
     assert(data != nullptr && oCol.data != nullptr);
     assert(index < size && size > 0);
@@ -112,6 +123,7 @@ public:
     oCol.size++;
   }
 
+  // Remove the element at index from this column, and destroy it
   void removeAt(uint16_t index) {
     assert(index < size);
     assert(size > 0);
@@ -119,6 +131,9 @@ public:
     char *loc = static_cast<char *>(data) + index * elementSize;
 
     ops.destroy(loc);
+
+    // If the element being removed is not the last element, move the last
+    // element (swap and pop) into the location of the removed element
     if (index < size - 1) {
       char *lastLoc = static_cast<char *>(data) + (size - 1) * elementSize;
       ops.moveConstruct(lastLoc, loc);
@@ -156,6 +171,8 @@ public:
     return (char *)data + size * elementSize;
   }
 
+  // Add a new element of type T to the column, constructing it in place with
+  // the provided arguments. Returns a reference to the new element.
   template <typename T, typename... Args> T &emplace(Args &&...args) {
     assert(sizeof(T) == elementSize);
     assert(alignof(T) == alignment);
@@ -167,6 +184,9 @@ public:
     return *result;
   }
 
+  // Get a reference to the element at index, casted to type T.
+  // NOTE: this does not check that the type T is the same as the type of the
+  // data element
   template <typename T> T &get(size_t index) {
     return *reinterpret_cast<T *>((char *)data + index * elementSize);
   }
@@ -184,8 +204,13 @@ private:
   Column() = default;
 };
 
+// A class that represents an archetype, which is a collection of entities that
+// share the same set of components. Each archetype has a unique component mask
+// that identifies the components it contains, and a set of columns that store
+// the actual component data for each entity in the archetype.
 class Archetype {
 public:
+  // Create a new archetype with the specified component types
   template <typename... CompTypes> static Archetype create() {
     Archetype archetype;
 
@@ -195,6 +220,7 @@ public:
     return archetype;
   }
 
+  // create an empty archetype with no components
   static Archetype createEmpty() {
     Archetype archetype;
 
@@ -211,6 +237,7 @@ public:
 
   const ComponentMask &getMask() const { return mask; }
 
+  // Create a new archetype with the same components as this one, but with an additional component of type T
   template <typename T> Archetype createAndAddComp(const ComponentMask &mask) {
     Archetype archetype;
 
@@ -224,11 +251,13 @@ public:
 
     archetype.registerColumn<T>();
 
+    //DEBUG: check that the new archetype is valid
     archetype.assertValid();
 
     return archetype;
   }
 
+  //Create a new archetype with the same components as this one, but with the component of the compId removed
   Archetype createAndRemoveComp(const ComponentMask &mask, ComponentID compId) {
     Archetype archetype;
 
@@ -237,10 +266,12 @@ public:
     for (const Column &col : columns) {
       if (col.compId != compId) {
         archetype.columns.emplace_back(col.copyStructureToEmptyColumn());
-        archetype.compColumnMap.emplace(col.compId, static_cast<uint16_t>(archetype.columns.size() - 1));
+        archetype.compColumnMap.emplace(
+            col.compId, static_cast<uint16_t>(archetype.columns.size() - 1));
       }
     }
 
+    //DEBUG: check that the new archetype is valid
     archetype.assertValid();
 
     return archetype;
@@ -248,6 +279,7 @@ public:
 
   size_t getColumnIndex(Entity e) { return entityColumnMap[e]; }
 
+  // Add an entity to the archetype, mapping it to the next available index in the columns
   void addEntity(Entity e) {
     entityColumnMap.insert({e, entities.size()});
     entities.push_back(e);
@@ -279,8 +311,10 @@ public:
       }
     }
 
+    // remove the entity from this archetype
     entityColumnMap.erase(e);
 
+    // if the entity being removed is not the last entity, move the last entity into its place (swap and pop)
     if (index + 1 < entities.size()) {
       Entity lastEntity = entities.back();
       entityColumnMap[lastEntity] = index;
@@ -307,6 +341,7 @@ public:
     }
   }
 
+  // Add a new component of type T to the archetype, constructing it in place with the provided arguments
   template <typename T, typename... Args> T &addDataToColumn(Args &&...args) {
     ComponentID id = getComponentID<T>();
     assert(compColumnMap.find(id) != compColumnMap.end());
@@ -327,6 +362,7 @@ private:
 
   Archetype() {}
 
+  // Register a new column for components of type T in the archetype
   template <typename T> void registerColumn() {
     ComponentID id = getComponentID<T>();
     columns.emplace_back(Column::create<T>());

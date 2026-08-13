@@ -11,6 +11,7 @@ public:
   int counter = 0;
 
   World() {
+    //create the empty archetype: which is the archetype with no components, which all entities start in
     archetypes.emplace_back(Archetype::createEmpty());
     maskToAtIdMap.insert({emptyCompMask(), 0});
   }
@@ -23,6 +24,7 @@ public:
     return at.getComponent<T>(e);
   }
 
+  //add a component to an entity, moving it to the correct archetype
   template <typename T, typename... Args>
   T &addComponentToEntity(Entity e, Args &&...args) {
     size_t oldAtId = entityToAtIdMap[e];
@@ -32,6 +34,7 @@ public:
 
     auto it = maskToAtIdMap.find(newMask);
 
+    //if the archetype doesn't exist yet, create it and add the component
     size_t newAtId;
     if (it == maskToAtIdMap.end()) {
       // the archetype doesn't exist yet
@@ -43,14 +46,17 @@ public:
       newAtId = it->second;
     }
 
+    //move data from the old archetype to the new one
     archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
 
     entityToAtIdMap[e] = newAtId;
 
+    //add the new component to the new archetype
     return archetypes[newAtId].addDataToColumn<T>(
         std::forward<Args>(args)...);
   }
 
+  //remove a component from an entity, moving it to the correct archetype
   template <typename T>
   void removeComponentFromEntity(Entity e) {
     size_t oldAtId = entityToAtIdMap[e];
