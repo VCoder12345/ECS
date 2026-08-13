@@ -1,11 +1,11 @@
 #pragma once
 
-#include <ecs/Utility.h>
 #include <ecs/Column.h>
+#include <ecs/Utility.h>
 
+#include <cassert>
 #include <unordered_map>
 #include <vector>
-#include <cassert>
 
 // A class that represents an archetype, which is a collection of entities that
 // share the same set of components. Each archetype has a unique component mask
@@ -40,7 +40,8 @@ public:
 
   const ComponentMask &getMask() const { return mask; }
 
-  // Create a new archetype with the same components as this one, but with an additional component of type T
+  // Create a new archetype with the same components as this one, but with an
+  // additional component of type T
   template <typename T> Archetype createAndAddComp(const ComponentMask &mask) {
     Archetype archetype;
 
@@ -54,13 +55,14 @@ public:
 
     archetype.registerColumn<T>();
 
-    //DEBUG: check that the new archetype is valid
+    // DEBUG: check that the new archetype is valid
     archetype.assertValid();
 
     return archetype;
   }
 
-  //Create a new archetype with the same components as this one, but with the component of the compId removed
+  // Create a new archetype with the same components as this one, but with the
+  // component of the compId removed
   Archetype createAndRemoveComp(const ComponentMask &mask, ComponentID compId) {
     Archetype archetype;
 
@@ -74,7 +76,7 @@ public:
       }
     }
 
-    //DEBUG: check that the new archetype is valid
+    // DEBUG: check that the new archetype is valid
     archetype.assertValid();
 
     return archetype;
@@ -82,18 +84,24 @@ public:
 
   size_t getColumnIndex(Entity e) { return entityColumnMap[e]; }
 
-  // Add an entity to the archetype, mapping it to the next available index in the columns
+  // Add an entity to the archetype, mapping it to the next available index in
+  // the columns
   void addEntity(Entity e) {
     entityColumnMap.insert({e, entities.size()});
     entities.push_back(e);
   }
 
   // TODO: add error handling for non-existent entity or component
-  template <typename T> T &getComponent(Entity e) {
-    size_t index = entityColumnMap[e];
+  template <typename T> T &getComponentAt(size_t index) {
     Column &col = columns[compColumnMap[getComponentID<T>()]];
 
     return col.get<T>(index);
+  }
+
+  template <typename T> T &getComponent(Entity e) {
+    size_t index = entityColumnMap[e];
+
+    return getComponentAt<T>(index);
   }
 
   // Move the entity into oAt, transferring components shared by both
@@ -117,7 +125,8 @@ public:
     // remove the entity from this archetype
     entityColumnMap.erase(e);
 
-    // if the entity being removed is not the last entity, move the last entity into its place (swap and pop)
+    // if the entity being removed is not the last entity, move the last entity
+    // into its place (swap and pop)
     if (index + 1 < entities.size()) {
       Entity lastEntity = entities.back();
       entityColumnMap[lastEntity] = index;
@@ -144,7 +153,8 @@ public:
     }
   }
 
-  // Add a new component of type T to the archetype, constructing it in place with the provided arguments
+  // Add a new component of type T to the archetype, constructing it in place
+  // with the provided arguments
   template <typename T, typename... Args> T &addDataToColumn(Args &&...args) {
     ComponentID id = getComponentID<T>();
     assert(compColumnMap.find(id) != compColumnMap.end());
@@ -155,6 +165,16 @@ public:
   }
 
   std::vector<Entity> &getEntities() { return entities; }
+
+  template <typename... Components, typename F> void eachEntity(F &&func) {
+    // NOTE: we assume that entities and columns are structured in the same way
+    // i.e. entity on index 2 has column data for each column at index 2
+    for (size_t i = 0; i < entities.size(); ++i) {
+      Entity e = entities[i];
+
+      func(e, getComponentAt<Components>(i)...);
+    }
+  }
 
 private:
   ComponentMask mask;

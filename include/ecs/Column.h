@@ -1,6 +1,6 @@
 #pragma once
-#include <ecs/Utility.h>
 #include <cassert>
+#include <ecs/Utility.h>
 #include <new>
 
 // A struct that holds function pointers for moving and destroying components of
@@ -103,6 +103,10 @@ public:
   // NOTE: this does not check that the type T is the same as the type of the
   // data element
   template <typename T> T &get(size_t index) {
+    assert(sizeof(T) == elementSize);
+    assert(compId == getComponentID<T>());
+    assert(alignof(T) == alignment);
+
     return *reinterpret_cast<T *>((char *)data + index * elementSize);
   }
 
