@@ -106,9 +106,19 @@ public:
     char *newLoc = oCol.allocateSlot();
 
     ops.moveConstruct(loc, newLoc);
-    ops.destroy(loc);
-    oCol.size++;
 
+    removeAt(index);
+
+    oCol.size++;
+  }
+
+  void removeAt(uint16_t index) {
+    assert(index < size);
+    assert(size > 0);
+
+    char *loc = static_cast<char *>(data) + index * elementSize;
+
+    ops.destroy(loc);
     if (index < size - 1) {
       char *lastLoc = static_cast<char *>(data) + (size - 1) * elementSize;
       ops.moveConstruct(lastLoc, loc);
@@ -161,6 +171,8 @@ public:
     return *reinterpret_cast<T *>((char *)data + index * elementSize);
   }
 
+  size_t getSize() const { return size; }
+
 private:
   void *data = nullptr;
   size_t size = 0;
@@ -212,6 +224,25 @@ public:
 
     archetype.registerColumn<T>();
 
+    archetype.assertValid();
+
+    return archetype;
+  }
+
+  Archetype createAndRemoveComp(const ComponentMask &mask, ComponentID compId) {
+    Archetype archetype;
+
+    archetype.mask = mask;
+
+    for (const Column &col : columns) {
+      if (col.compId != compId) {
+        archetype.columns.emplace_back(col.copyStructureToEmptyColumn());
+        archetype.compColumnMap.emplace(col.compId, static_cast<uint16_t>(archetype.columns.size() - 1));
+      }
+    }
+
+    archetype.assertValid();
+
     return archetype;
   }
 
@@ -230,19 +261,22 @@ public:
     return col.get<T>(index);
   }
 
-  // assumes that oAt was created from the archetype, so that only the last
-  // column differs
+  // Move the entity into oAt, transferring components shared by both
+  // archetypes and destroying components that are absent from oAt.
   void swapAndPopColsInto(Entity e, Archetype &oAt) {
-    assert(columns.size() < oAt.columns.size());
     assert(entities.size() > 0);
 
     size_t index = entityColumnMap[e];
 
+    // copy each column that exists on the target archetype over
     for (size_t i = 0; i < columns.size(); ++i) {
       auto it = oAt.compColumnMap.find(columns[i].compId);
-      assert(it != oAt.compColumnMap.end());
-      size_t oColIndex = it->second;
-      columns[i].swapAndPopInto(index, oAt.columns[oColIndex]);
+      if (it != oAt.compColumnMap.end()) {
+        size_t oColIndex = it->second;
+        columns[i].swapAndPopInto(index, oAt.columns[oColIndex]);
+      } else {
+        columns[i].removeAt(index);
+      }
     }
 
     entityColumnMap.erase(e);
@@ -255,6 +289,22 @@ public:
     entities.pop_back();
 
     oAt.addEntity(e);
+  }
+
+  // only for debugging, checks if the archetype is valid
+  void assertValid() const {
+    assert(columns.size() == compColumnMap.size());
+
+    for (size_t i = 0; i < columns.size(); ++i) {
+      const Column &col = columns[i];
+
+      assert(mask.test(col.compId));
+      assert(col.getSize() == entities.size());
+
+      auto it = compColumnMap.find(col.compId);
+      assert(it != compColumnMap.end());
+      assert(it->second == i);
+    }
   }
 
   template <typename T, typename... Args> T &addDataToColumn(Args &&...args) {

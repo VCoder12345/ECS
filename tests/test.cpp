@@ -316,10 +316,10 @@ TEST_CASE("Adding multiple components produces correct archetype",
 }
 
 TEST_CASE("Randomized ECS stress test", "[ecs][stress]") {
-  constexpr int entityCount = 100;
+  constexpr int entityCount = 500;
   constexpr int operations = 1000;
 
-  std::mt19937 rng(0x12345678);
+  std::mt19937 rng(0x12345679);
 
   World world;
 
@@ -394,4 +394,331 @@ TEST_CASE("Randomized ECS stress test", "[ecs][stress]") {
     }
   }
 
+}
+
+TEST_CASE ("Remove components from entities with multiple components", "[ecs][remove]") {
+  World world;
+  Entity e = world.createEntity();
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Health>(e, 100);
+  REQUIRE(world.getArchetypeForEntity(e).getMask().test(getComponentID<Position>()));
+  REQUIRE(world.getArchetypeForEntity(e).getMask().test(getComponentID<Velocity>()));
+  REQUIRE(world.getArchetypeForEntity(e).getMask().test(getComponentID<Health>()));
+  world.removeComponentFromEntity<Velocity>(e);
+  REQUIRE(world.getArchetypeForEntity(e).getMask().test(getComponentID<Position>()));
+  REQUIRE_FALSE(world.getArchetypeForEntity(e).getMask().test(getComponentID<Velocity>()));
+  REQUIRE(world.getArchetypeForEntity(e).getMask().test(getComponentID<Health>()));
+}
+
+TEST_CASE("Remove component preserves remaining data", "[ecs][remove][data]") {
+  World world;
+
+  Entity e = world.createEntity();
+
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+
+  world.removeComponentFromEntity<Position>(e);
+
+  auto &at = world.getArchetypeForEntity(e);
+
+  REQUIRE_FALSE(at.getMask().test(getComponentID<Position>()));
+  REQUIRE(at.getMask().test(getComponentID<Velocity>()));
+
+  Velocity &v = world.getComponent<Velocity>(e);
+
+  REQUIRE(v.x == 4.0f);
+  REQUIRE(v.y == 5.0f);
+  REQUIRE(v.z == 6.0f);
+}
+
+
+TEST_CASE("Remove middle component preserves surrounding data",
+          "[ecs][remove][middle]") {
+  World world;
+
+  Entity e = world.createEntity();
+
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Health>(e, 100);
+
+  world.removeComponentFromEntity<Velocity>(e);
+
+  auto &at = world.getArchetypeForEntity(e);
+
+  REQUIRE(at.getMask().test(getComponentID<Position>()));
+  REQUIRE_FALSE(at.getMask().test(getComponentID<Velocity>()));
+  REQUIRE(at.getMask().test(getComponentID<Health>()));
+
+  Position &p = world.getComponent<Position>(e);
+  Health &h = world.getComponent<Health>(e);
+
+  REQUIRE(p.x == 1.0f);
+  REQUIRE(p.y == 2.0f);
+  REQUIRE(p.z == 3.0f);
+  REQUIRE(h.hearts == 100);
+}
+
+
+TEST_CASE("Remove first component preserves remaining data",
+          "[ecs][remove][first]") {
+  World world;
+
+  Entity e = world.createEntity();
+
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Health>(e, 100);
+
+  world.removeComponentFromEntity<Position>(e);
+
+  auto &at = world.getArchetypeForEntity(e);
+
+  REQUIRE_FALSE(at.getMask().test(getComponentID<Position>()));
+  REQUIRE(at.getMask().test(getComponentID<Velocity>()));
+  REQUIRE(at.getMask().test(getComponentID<Health>()));
+
+  Velocity &v = world.getComponent<Velocity>(e);
+  Health &h = world.getComponent<Health>(e);
+
+  REQUIRE(v.x == 4.0f);
+  REQUIRE(v.y == 5.0f);
+  REQUIRE(v.z == 6.0f);
+  REQUIRE(h.hearts == 100);
+}
+
+
+TEST_CASE("Remove last component preserves remaining data",
+          "[ecs][remove][last]") {
+  World world;
+
+  Entity e = world.createEntity();
+
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Health>(e, 100);
+
+  world.removeComponentFromEntity<Health>(e);
+
+  auto &at = world.getArchetypeForEntity(e);
+
+  REQUIRE(at.getMask().test(getComponentID<Position>()));
+  REQUIRE(at.getMask().test(getComponentID<Velocity>()));
+  REQUIRE_FALSE(at.getMask().test(getComponentID<Health>()));
+
+  Position &p = world.getComponent<Position>(e);
+  Velocity &v = world.getComponent<Velocity>(e);
+
+  REQUIRE(p.x == 1.0f);
+  REQUIRE(p.y == 2.0f);
+  REQUIRE(p.z == 3.0f);
+
+  REQUIRE(v.x == 4.0f);
+  REQUIRE(v.y == 5.0f);
+  REQUIRE(v.z == 6.0f);
+}
+
+
+TEST_CASE("Remove component from middle entity preserves other entities",
+          "[ecs][remove][swap-pop]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+  Entity e3 = world.createEntity();
+
+  world.addComponentToEntity<Position>(e1, 1.0f, 1.0f, 1.0f);
+  world.addComponentToEntity<Position>(e2, 2.0f, 2.0f, 2.0f);
+  world.addComponentToEntity<Position>(e3, 3.0f, 3.0f, 3.0f);
+
+  world.addComponentToEntity<Velocity>(e1, 10.0f, 10.0f, 10.0f);
+  world.addComponentToEntity<Velocity>(e2, 20.0f, 20.0f, 20.0f);
+  world.addComponentToEntity<Velocity>(e3, 30.0f, 30.0f, 30.0f);
+
+  // e2 is in the middle, so removing its component exercises swap-and-pop.
+  world.removeComponentFromEntity<Velocity>(e2);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e2).x == 2.0f);
+  REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
+
+  REQUIRE(world.getComponent<Velocity>(e1).x == 10.0f);
+  REQUIRE(world.getComponent<Velocity>(e3).x == 30.0f);
+}
+
+
+TEST_CASE("Remove component from last entity",
+          "[ecs][remove][swap-pop][last]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+  Entity e3 = world.createEntity();
+
+  world.addComponentToEntity<Position>(
+      e1, static_cast<float>(e1), 2.0f, 3.0f);
+  world.addComponentToEntity<Position>(
+      e2, static_cast<float>(e2), 2.0f, 3.0f);
+  world.addComponentToEntity<Position>(
+      e3, static_cast<float>(e3), 2.0f, 3.0f);
+
+  world.addComponentToEntity<Velocity>(
+      e1, static_cast<float>(e1) + 10.0f, 20.0f, 30.0f);
+  world.addComponentToEntity<Velocity>(
+      e2, static_cast<float>(e2) + 10.0f, 20.0f, 30.0f);
+  world.addComponentToEntity<Velocity>(
+      e3, static_cast<float>(e3) + 10.0f, 20.0f, 30.0f);
+
+  // e3 is last, so this exercises the non-swap branch.
+  world.removeComponentFromEntity<Velocity>(e3);
+
+  REQUIRE(world.getComponent<Position>(e1).x == static_cast<float>(e1));
+  REQUIRE(world.getComponent<Position>(e2).x == static_cast<float>(e2));
+  REQUIRE(world.getComponent<Position>(e3).x == static_cast<float>(e3));
+
+  REQUIRE(world.getComponent<Velocity>(e1).x ==
+          static_cast<float>(e1) + 10.0f);
+  REQUIRE(world.getComponent<Velocity>(e2).x ==
+          static_cast<float>(e2) + 10.0f);
+}
+
+
+TEST_CASE("Remove all components from entity",
+          "[ecs][remove][empty]") {
+  World world;
+
+  Entity e = world.createEntity();
+
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Health>(e, 100);
+
+  world.removeComponentFromEntity<Position>(e);
+  world.removeComponentFromEntity<Velocity>(e);
+  world.removeComponentFromEntity<Health>(e);
+
+  auto &at = world.getArchetypeForEntity(e);
+
+  REQUIRE(at.getMask() == emptyCompMask());
+  REQUIRE(at.getEntities().size() == 1);
+  REQUIRE(at.getEntities()[0] == e);
+}
+
+
+TEST_CASE("Remove and re-add component",
+          "[ecs][remove][readd]") {
+  World world;
+
+  Entity e = world.createEntity();
+
+  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+
+  world.removeComponentFromEntity<Position>(e);
+
+  world.addComponentToEntity<Position>(e, 10.0f, 20.0f, 30.0f);
+
+  Position &p = world.getComponent<Position>(e);
+  Velocity &v = world.getComponent<Velocity>(e);
+
+  REQUIRE(p.x == 10.0f);
+  REQUIRE(p.y == 20.0f);
+  REQUIRE(p.z == 30.0f);
+
+  REQUIRE(v.x == 4.0f);
+  REQUIRE(v.y == 5.0f);
+  REQUIRE(v.z == 6.0f);
+}
+
+
+TEST_CASE("Remove component does not affect other archetypes",
+          "[ecs][remove][isolation]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+
+  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e1, 4.0f, 5.0f, 6.0f);
+
+  world.addComponentToEntity<Position>(e2, 10.0f, 20.0f, 30.0f);
+  world.addComponentToEntity<Health>(e2, 100);
+
+  world.removeComponentFromEntity<Velocity>(e1);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e1).y == 2.0f);
+  REQUIRE(world.getComponent<Position>(e1).z == 3.0f);
+
+  REQUIRE(world.getComponent<Position>(e2).x == 10.0f);
+  REQUIRE(world.getComponent<Position>(e2).y == 20.0f);
+  REQUIRE(world.getComponent<Position>(e2).z == 30.0f);
+
+  REQUIRE(world.getComponent<Health>(e2).hearts == 100);
+}
+
+
+TEST_CASE("Different component removal orders",
+          "[ecs][remove][orders]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+
+  for (Entity e : {e1, e2}) {
+    world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+    world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+    world.addComponentToEntity<Health>(e, 100);
+  }
+
+  world.removeComponentFromEntity<Position>(e1);
+  world.removeComponentFromEntity<Health>(e2);
+
+  REQUIRE(world.getArchetypeForEntity(e1).getMask().test(
+      getComponentID<Velocity>()));
+  REQUIRE(world.getArchetypeForEntity(e1).getMask().test(
+      getComponentID<Health>()));
+  REQUIRE_FALSE(world.getArchetypeForEntity(e1).getMask().test(
+      getComponentID<Position>()));
+
+  REQUIRE(world.getArchetypeForEntity(e2).getMask().test(
+      getComponentID<Position>()));
+  REQUIRE(world.getArchetypeForEntity(e2).getMask().test(
+      getComponentID<Velocity>()));
+  REQUIRE_FALSE(world.getArchetypeForEntity(e2).getMask().test(
+      getComponentID<Health>()));
+}
+
+
+TEST_CASE("Removal works with different component insertion orders",
+          "[ecs][remove][archetype]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+
+  // Creates Position -> Velocity -> Health.
+  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponentToEntity<Velocity>(e1, 4.0f, 5.0f, 6.0f);
+  world.addComponentToEntity<Health>(e1, 100);
+
+  // Reaches the same component mask through a different order.
+  world.addComponentToEntity<Health>(e2, 200);
+  world.addComponentToEntity<Velocity>(e2, 40.0f, 50.0f, 60.0f);
+  world.addComponentToEntity<Position>(e2, 10.0f, 20.0f, 30.0f);
+
+  world.removeComponentFromEntity<Velocity>(e1);
+  world.removeComponentFromEntity<Position>(e2);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e1).y == 2.0f);
+  REQUIRE(world.getComponent<Position>(e1).z == 3.0f);
+  REQUIRE(world.getComponent<Health>(e1).hearts == 100);
+
+  REQUIRE(world.getComponent<Velocity>(e2).x == 40.0f);
+  REQUIRE(world.getComponent<Velocity>(e2).y == 50.0f);
+  REQUIRE(world.getComponent<Velocity>(e2).z == 60.0f);
+  REQUIRE(world.getComponent<Health>(e2).hearts == 200);
 }

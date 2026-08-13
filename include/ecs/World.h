@@ -4,6 +4,8 @@
 #include <ecs/Utility.h>
 #include <unordered_map>
 
+//TODO: delete empty archetypes?
+
 class World {
 public:
   int counter = 0;
@@ -47,6 +49,34 @@ public:
 
     return archetypes[newAtId].addDataToColumn<T>(
         std::forward<Args>(args)...);
+  }
+
+  template <typename T>
+  void removeComponentFromEntity(Entity e) {
+    size_t oldAtId = entityToAtIdMap[e];
+    const ComponentMask &oldMask = archetypes[oldAtId].getMask();
+    ComponentMask newMask(oldMask);
+    ComponentID compId = getComponentID<T>();
+    newMask.reset(compId);
+
+    auto it = maskToAtIdMap.find(newMask);
+
+    //TODO: with the setup now it is actually impossible that the archetype doesn't exist
+    //that might change though
+    size_t newAtId;
+    if (it == maskToAtIdMap.end()) {
+      // the archetype doesn't exist yet
+      archetypes.emplace_back(archetypes[oldAtId].createAndRemoveComp(newMask, compId));
+      newAtId = archetypes.size() - 1;
+      maskToAtIdMap.insert({newMask, newAtId});
+    } else {
+      // the archetype already exists
+      newAtId = it->second;
+    }
+
+    archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
+
+    entityToAtIdMap[e] = newAtId;
   }
 
   Archetype &getArchetypeForEntity(Entity e) {
