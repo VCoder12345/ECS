@@ -10,11 +10,7 @@ class World {
 public:
   int counter = 0;
 
-  World() {
-    //create the empty archetype: which is the archetype with no components, which all entities start in
-    archetypes.emplace_back(Archetype::createEmpty());
-    maskToAtIdMap.insert({emptyCompMask(), 0});
-  }
+  World();
 
   Entity createEntity();
 
@@ -85,10 +81,7 @@ public:
     entityToAtIdMap[e] = newAtId;
   }
 
-  Archetype &getArchetypeForEntity(Entity e) {
-    size_t atId = entityToAtIdMap[e];
-    return archetypes[atId];
-  }
+  Archetype &getArchetypeForEntity(Entity e);
 
 private:
   // Note that the first archetype (index=0) is always an empty archetype
