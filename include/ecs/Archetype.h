@@ -42,10 +42,11 @@ public:
 
   // Create a new archetype with the same components as this one, but with an
   // additional component of type T
-  template <typename T> Archetype createAndAddComp(const ComponentMask &mask) {
+  template <typename T>
+  Archetype createAndAddComp(const ComponentMask &newMask) {
     Archetype archetype;
 
-    archetype.mask = mask;
+    archetype.mask = newMask;
 
     for (const Column &col : columns) {
       archetype.columns.emplace_back(col.copyStructureToEmptyColumn());
@@ -56,17 +57,18 @@ public:
     archetype.registerColumn<T>();
 
     // DEBUG: check that the new archetype is valid
-    archetype.assertValid();
+    assert(archetype.validate());
 
     return archetype;
   }
 
   // Create a new archetype with the same components as this one, but with the
   // component of the compId removed
-  Archetype createAndRemoveComp(const ComponentMask &mask, ComponentID compId) {
+  Archetype createAndRemoveComp(const ComponentMask &newMask,
+                                ComponentID compId) {
     Archetype archetype;
 
-    archetype.mask = mask;
+    archetype.mask = newMask;
 
     for (const Column &col : columns) {
       if (col.compId != compId) {
@@ -77,7 +79,7 @@ public:
     }
 
     // DEBUG: check that the new archetype is valid
-    archetype.assertValid();
+    assert(archetype.validate());
 
     return archetype;
   }
@@ -138,19 +140,26 @@ public:
   }
 
   // only for debugging, checks if the archetype is valid
-  void assertValid() const {
-    assert(columns.size() == compColumnMap.size());
-
-    for (size_t i = 0; i < columns.size(); ++i) {
+  bool validate() const {
+    for (std::size_t i = 0; i < columns.size(); ++i) {
       const Column &col = columns[i];
 
-      assert(mask.test(col.compId));
-      assert(col.getSize() == entities.size());
+      if (!mask.test(col.compId))
+        return false;
+
+      if (col.getSize() != entities.size())
+        return false;
 
       auto it = compColumnMap.find(col.compId);
-      assert(it != compColumnMap.end());
-      assert(it->second == i);
+
+      if (it == compColumnMap.end())
+        return false;
+
+      if (it->second != i)
+        return false;
     }
+
+    return true;
   }
 
   // Add a new component of type T to the archetype, constructing it in place

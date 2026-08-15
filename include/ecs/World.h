@@ -2,7 +2,6 @@
 
 #include <ecs/Archetype.h>
 #include <ecs/Utility.h>
-#include <functional>
 #include <unordered_map>
 
 // TODO: delete empty archetypes?

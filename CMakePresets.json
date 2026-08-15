@@ -1,5 +1,6 @@
 {
   "version": 6,
+
   "configurePresets": [
     {
       "name": "base",
@@ -16,7 +17,9 @@
       "inherits": "base",
       "displayName": "Debug",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTS": "ON",
+        "BUILD_BENCHMARKS": "OFF"
       }
     },
 
@@ -25,17 +28,32 @@
       "inherits": "base",
       "displayName": "Release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON",
+        "BUILD_BENCHMARKS": "OFF"
       }
     },
 
     {
-      "name": "relwithdebinfo",
+      "name": "benchmark",
       "inherits": "base",
-      "displayName": "Release with Debug Info",
+      "displayName": "Benchmark",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "OFF",
+        "BUILD_BENCHMARKS": "ON"
       }
+    },
+
+    {
+      "name": "profile",
+      "inherits": "base",
+      "displayName": "Profile",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "BUILD_TESTS": "OFF",
+        "BUILD_BENCHMARKS": "ON",
+        "ENABLE_TRACY": "ON"
     }
   ],
 
@@ -51,8 +69,12 @@
     },
 
     {
-      "name": "relwithdebinfo",
-      "configurePreset": "relwithdebinfo"
+      "name": "benchmark",
+      "configurePreset": "benchmark"
+    },
+    {
+      "name": "profile",
+      "configurePreset": "profile"
     }
   ],
 
@@ -60,6 +82,14 @@
     {
       "name": "debug",
       "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+
+    {
+      "name": "release",
+      "configurePreset": "release",
       "output": {
         "outputOnFailure": true
       }

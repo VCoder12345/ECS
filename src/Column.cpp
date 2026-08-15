@@ -1,9 +1,9 @@
 #include <ecs/Column.h>
 
 Column::Column(Column &&other) noexcept
-    : data(other.data), size(other.size), capacity(other.capacity),
-      elementSize(other.elementSize), alignment(other.alignment),
-      ops(other.ops), compId(other.compId) {
+    : compId(other.compId), data(other.data), size(other.size),
+      capacity(other.capacity), elementSize(other.elementSize),
+      alignment(other.alignment), ops(other.ops) {
   other.data = nullptr;
   other.size = 0;
   other.capacity = 0;
