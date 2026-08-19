@@ -1,5 +1,5 @@
+#include <ecs/Profiling.h>
 #include <ecs/World.h>
-#include <tracy/Tracy.hpp>
 
 struct Position {
   float x, y, z;
@@ -12,7 +12,7 @@ struct Velocity {
 int main() {
   World world;
 
-  constexpr int entityCount = 1'000'000;
+  constexpr int entityCount = 5'000;
 
   for (int i = 0; i < entityCount; ++i) {
     Entity e = world.createEntity();
@@ -22,7 +22,9 @@ int main() {
     world.addComponentToEntity<Velocity>(e, 1.0f, 2.0f, 3.0f);
   }
 
-  while (true) {
+  constexpr int frameCount = 10'000;
+
+  for (int frame = 0; frame < frameCount; ++frame) {
     {
       ZoneScopedN("ECS update");
 

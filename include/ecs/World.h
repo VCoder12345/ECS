@@ -4,6 +4,8 @@
 #include <ecs/Utility.h>
 #include <unordered_map>
 
+#include <ecs/Profiling.h>
+
 // TODO: delete empty archetypes?
 
 class World {
@@ -22,6 +24,7 @@ public:
   // add a component to an entity, moving it to the correct archetype
   template <typename T, typename... Args>
   T &addComponentToEntity(Entity e, Args &&...args) {
+    ZoneScoped;
     size_t oldAtId = entityToAtIdMap[e];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);
@@ -52,6 +55,7 @@ public:
 
   // remove a component from an entity, moving it to the correct archetype
   template <typename T> void removeComponentFromEntity(Entity e) {
+    ZoneScoped;
     size_t oldAtId = entityToAtIdMap[e];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);
@@ -82,6 +86,7 @@ public:
   Archetype &getArchetypeForEntity(Entity e);
 
   template <typename... Components, typename F> void each(F &&func) {
+    ZoneScoped;
     ComponentMask requiredMask;
     (requiredMask.set(getComponentID<Components>()), ...);
 

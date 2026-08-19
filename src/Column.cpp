@@ -34,7 +34,7 @@ Column Column::copyStructureToEmptyColumn() const {
   return col;
 }
 
-void Column::swapAndPopInto(uint16_t index, Column &oCol) {
+void Column::swapAndPopInto(size_t index, Column &oCol) {
   assert(data != nullptr && oCol.data != nullptr);
   assert(index < size && size > 0);
 
@@ -48,7 +48,7 @@ void Column::swapAndPopInto(uint16_t index, Column &oCol) {
   oCol.size++;
 }
 
-void Column::removeAt(uint16_t index) {
+void Column::removeAt(size_t index) {
   assert(index < size);
   assert(size > 0);
 

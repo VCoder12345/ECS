@@ -1166,3 +1166,4 @@ TEST_CASE("query component order does not depend on column order",
         REQUIRE(p.z == 3.0f);
       });
 }
+

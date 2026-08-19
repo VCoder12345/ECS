@@ -46,14 +46,15 @@
     },
 
     {
-      "name": "profile",
+      "name": "profiling",
       "inherits": "base",
-      "displayName": "Profile",
+      "displayName": "Profiling",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "BUILD_TESTS": "OFF",
-        "BUILD_BENCHMARKS": "ON",
+        "BUILD_BENCHMARKS": "OFF",
         "ENABLE_TRACY": "ON"
+      }
     }
   ],
 
@@ -73,8 +74,8 @@
       "configurePreset": "benchmark"
     },
     {
-      "name": "profile",
-      "configurePreset": "profile"
+      "name": "profiling",
+      "configurePreset": "profiling"
     }
   ],
 
@@ -82,14 +83,6 @@
     {
       "name": "debug",
       "configurePreset": "debug",
-      "output": {
-        "outputOnFailure": true
-      }
-    },
-
-    {
-      "name": "release",
-      "configurePreset": "release",
       "output": {
         "outputOnFailure": true
       }

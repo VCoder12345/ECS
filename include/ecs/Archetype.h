@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <ecs/Profiling.h>
+
 // A class that represents an archetype, which is a collection of entities that
 // share the same set of components. Each archetype has a unique component mask
 // that identifies the components it contains, and a set of columns that store
@@ -15,6 +17,7 @@ class Archetype {
 public:
   // Create a new archetype with the specified component types
   template <typename... CompTypes> static Archetype create() {
+    ZoneScoped;
     Archetype archetype;
 
     (archetype.registerColumn<CompTypes>(), ...);
@@ -44,6 +47,7 @@ public:
   // additional component of type T
   template <typename T>
   Archetype createAndAddComp(const ComponentMask &newMask) {
+    ZoneScoped;
     Archetype archetype;
 
     archetype.mask = newMask;
@@ -66,6 +70,7 @@ public:
   // component of the compId removed
   Archetype createAndRemoveComp(const ComponentMask &newMask,
                                 ComponentID compId) {
+    ZoneScoped;
     Archetype archetype;
 
     archetype.mask = newMask;
@@ -74,7 +79,7 @@ public:
       if (col.compId != compId) {
         archetype.columns.emplace_back(col.copyStructureToEmptyColumn());
         archetype.compColumnMap.emplace(
-            col.compId, static_cast<uint16_t>(archetype.columns.size() - 1));
+            col.compId, static_cast<ColumnIndex>(archetype.columns.size() - 1));
       }
     }
 
@@ -89,18 +94,21 @@ public:
   // Add an entity to the archetype, mapping it to the next available index in
   // the columns
   void addEntity(Entity e) {
+    ZoneScoped;
     entityColumnMap.insert({e, entities.size()});
     entities.push_back(e);
   }
 
   // TODO: add error handling for non-existent entity or component
   template <typename T> T &getComponentAt(size_t index) {
+    ZoneScoped;
     Column &col = columns[compColumnMap[getComponentID<T>()]];
 
     return col.get<T>(index);
   }
 
   template <typename T> T &getComponent(Entity e) {
+    ZoneScoped;
     size_t index = entityColumnMap[e];
 
     return getComponentAt<T>(index);
@@ -109,6 +117,7 @@ public:
   // Move the entity into oAt, transferring components shared by both
   // archetypes and destroying components that are absent from oAt.
   void swapAndPopColsInto(Entity e, Archetype &oAt) {
+    ZoneScoped;
     assert(entities.size() > 0);
 
     size_t index = entityColumnMap[e];
@@ -165,6 +174,7 @@ public:
   // Add a new component of type T to the archetype, constructing it in place
   // with the provided arguments
   template <typename T, typename... Args> T &addDataToColumn(Args &&...args) {
+    ZoneScoped;
     ComponentID id = getComponentID<T>();
     assert(compColumnMap.find(id) != compColumnMap.end());
     assert(mask.test(id));
@@ -176,6 +186,7 @@ public:
   std::vector<Entity> &getEntities() { return entities; }
 
   template <typename... Components, typename F> void eachEntity(F &&func) {
+    ZoneScoped;
     // NOTE: we assume that entities and columns are structured in the same way
     // i.e. entity on index 2 has column data for each column at index 2
     for (size_t i = 0; i < entities.size(); ++i) {
@@ -187,8 +198,8 @@ public:
 
 private:
   ComponentMask mask;
-  std::unordered_map<ComponentID, uint16_t> compColumnMap;
-  std::unordered_map<Entity, uint16_t> entityColumnMap;
+  std::unordered_map<ComponentID, ColumnIndex> compColumnMap;
+  std::unordered_map<Entity, ColumnIndex> entityColumnMap;
   std::vector<Entity> entities;
   std::vector<Column> columns;
 
@@ -199,6 +210,6 @@ private:
     ComponentID id = getComponentID<T>();
     columns.emplace_back(Column::create<T>());
 
-    compColumnMap.emplace(id, static_cast<uint16_t>(columns.size() - 1));
+    compColumnMap.emplace(id, static_cast<ColumnIndex>(columns.size() - 1));
   }
 };

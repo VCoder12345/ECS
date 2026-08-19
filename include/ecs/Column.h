@@ -18,6 +18,8 @@ public:
   }
 };
 
+// TODO: throw error if column has reached maximum size (size_t max value) and we try to add more elements
+
 // A class that represents a column of components of a specific type in an
 // archetype.
 class Column {
@@ -76,10 +78,10 @@ public:
 
   // Move the element at index from this column to the other column, and remove
   // it
-  void swapAndPopInto(uint16_t index, Column &oCol);
+  void swapAndPopInto(size_t index, Column &oCol);
 
   // Remove the element at index from this column, and destroy it
-  void removeAt(uint16_t index);
+  void removeAt(size_t index);
 
   // makes sure that there is enough space for a new element, and returns the
   // location of the new element Note that it does not increment the size of the
