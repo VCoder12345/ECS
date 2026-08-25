@@ -10,11 +10,11 @@
 
 class World {
 public:
-  int counter = 0;
-
   World();
 
   Entity createEntity();
+
+  void removeEntity(Entity e);
 
   template <typename T> T &getComponent(Entity e) {
     Archetype &at = getArchetypeForEntity(e);
@@ -23,7 +23,7 @@ public:
 
   // add a component to an entity, moving it to the correct archetype
   template <typename T, typename... Args>
-  T &addComponentToEntity(Entity e, Args &&...args) {
+  T &addComponent(Entity e, Args &&...args) {
     ZoneScoped;
     size_t oldAtId = entityToAtIdMap[e];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
@@ -54,7 +54,7 @@ public:
   }
 
   // remove a component from an entity, moving it to the correct archetype
-  template <typename T> void removeComponentFromEntity(Entity e) {
+  template <typename T> void removeComponent(Entity e) {
     ZoneScoped;
     size_t oldAtId = entityToAtIdMap[e];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
@@ -91,7 +91,7 @@ public:
     (requiredMask.set(getComponentID<Components>()), ...);
 
     for (Archetype &arch : archetypes) {
-      //does the archetype have the required components?
+      // does the archetype have the required components?
       if ((arch.getMask() & requiredMask) != requiredMask)
         continue;
 
@@ -99,9 +99,18 @@ public:
     }
   }
 
+  template <typename T> bool hasComponent(Entity e) {
+    Archetype &at = getArchetypeForEntity(e);
+    return at.getMask().test(getComponentID<T>());
+  }
+
 private:
   // Note that the first archetype (index=0) is always an empty archetype
   std::vector<Archetype> archetypes;
   std::unordered_map<ComponentMask, size_t> maskToAtIdMap;
   std::vector<size_t> entityToAtIdMap;
+
+  int counter = 0;
+
+  std::vector<Entity> unusedEntityIds;
 };

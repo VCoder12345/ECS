@@ -130,6 +130,20 @@ public:
     return getComponentAt<T>(index);
   }
 
+
+  void removeEntity(Entity e) {
+    ZoneScoped;
+    assert(entities.size() > 0);
+    size_t index = entityColumnMap[e];
+
+    // remove the components for the entity from each column
+    for (Column &col : columns) {
+      col.removeAt(index);
+    }
+
+    removeEntityAt(e, index);
+  }
+
   // Move the entity into oAt, transferring components shared by both
   // archetypes and destroying components that are absent from oAt.
   void swapAndPopColsInto(Entity e, Archetype &oAt) {
@@ -149,17 +163,7 @@ public:
       }
     }
 
-    // remove the entity from this archetype
-    entityColumnMap.erase(e);
-
-    // if the entity being removed is not the last entity, move the last entity
-    // into its place (swap and pop)
-    if (index + 1 < entities.size()) {
-      Entity lastEntity = entities.back();
-      entityColumnMap[lastEntity] = index;
-      entities[index] = lastEntity;
-    }
-    entities.pop_back();
+    removeEntityAt(e, index);
 
     oAt.addEntity(e);
   }
@@ -234,5 +238,21 @@ private:
     columns.emplace_back(Column::create<T>());
 
     compColumnMap.emplace(id, static_cast<ColumnIndex>(columns.size() - 1));
+  }
+
+
+  void removeEntityAt(Entity e, size_t index) {
+    // remove the entity from this archetype
+    entityColumnMap.erase(e);
+
+    // if the entity being removed is not the last entity, move the last entity
+    // into its place (swap and pop)
+    if (index + 1 < entities.size()) {
+      Entity lastEntity = entities.back();
+      entityColumnMap[lastEntity] = index;
+      entities[index] = lastEntity;
+    }
+    entities.pop_back();
+
   }
 };

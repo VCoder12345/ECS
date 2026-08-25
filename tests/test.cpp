@@ -63,7 +63,13 @@ TEST_CASE("Entities receive unique IDs", "[ecs]") {
 
   REQUIRE(e1 + 1 == e2);
   REQUIRE(e2 + 1 == e3);
+
+  world.removeEntity(e2);
+  Entity e4 = world.createEntity(); // should reuse e2's ID
+
+  REQUIRE(e4 == e2);
 }
+
 
 TEST_CASE("Adding a component moves entity to correct archetype",
           "[ecs][component]") {
@@ -73,7 +79,7 @@ TEST_CASE("Adding a component moves entity to correct archetype",
 
   REQUIRE(world.getArchetypeForEntity(e).getMask().none());
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
 
   auto &archetype = world.getArchetypeForEntity(e);
 
@@ -87,7 +93,7 @@ TEST_CASE("Component data is constructed correctly", "[ecs][component]") {
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
 
   Position &p = world.getComponent<Position>(e);
 
@@ -106,8 +112,8 @@ TEST_CASE("Adding component preserves existing components",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Health>(e, 100);
 
   Position &position = world.getComponent<Position>(e);
   Health &health = world.getComponent<Health>(e);
@@ -125,10 +131,10 @@ TEST_CASE("Entity row index is preserved during migration",
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Position>(e2, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e2, 4.0f, 5.0f, 6.0f);
 
-  world.addComponentToEntity<Health>(e1, 100);
+  world.addComponent<Health>(e1, 100);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e2).x == 4.0f);
@@ -143,23 +149,37 @@ TEST_CASE("Multiple entities preserve their component data",
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
 
-  world.addComponentToEntity<Position>(e2, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e2, 4.0f, 5.0f, 6.0f);
 
-  world.addComponentToEntity<Position>(e3, 7.0f, 8.0f, 9.0f);
+  world.addComponent<Position>(e3, 7.0f, 8.0f, 9.0f);
 
-  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
-  REQUIRE(world.getComponent<Position>(e1).y == 2.0f);
-  REQUIRE(world.getComponent<Position>(e1).z == 3.0f);
 
   REQUIRE(world.getComponent<Position>(e2).x == 4.0f);
   REQUIRE(world.getComponent<Position>(e2).y == 5.0f);
   REQUIRE(world.getComponent<Position>(e2).z == 6.0f);
 
+  world.removeEntity(e2);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e1).y == 2.0f);
+  REQUIRE(world.getComponent<Position>(e1).z == 3.0f);
+
   REQUIRE(world.getComponent<Position>(e3).x == 7.0f);
   REQUIRE(world.getComponent<Position>(e3).y == 8.0f);
   REQUIRE(world.getComponent<Position>(e3).z == 9.0f);
+}
+
+TEST_CASE ("Reusing entity IDs preserves component data", "[ecs][reuse]") {
+  World world;
+  Entity e1 = world.createEntity();
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.removeEntity(e1);
+  Entity e2 = world.createEntity(); // should reuse e1's ID
+  REQUIRE(e2 == e1);
+  // The new entity should not have the old component data
+  REQUIRE(!world.hasComponent<Position>(e2));
 }
 
 TEST_CASE("Archetype migration preserves other entities", "[ecs][migration]") {
@@ -169,15 +189,15 @@ TEST_CASE("Archetype migration preserves other entities", "[ecs][migration]") {
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e3, 3.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e3, 3.0f, 0.0f, 0.0f);
 
   // e1 is removed from the Position-only archetype.
   // e3 should be swapped into e1's old row.
-  world.addComponentToEntity<Health>(e1, 100);
+  world.addComponent<Health>(e1, 100);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e2).x == 2.0f);
@@ -194,15 +214,15 @@ TEST_CASE("Repeated archetype migration preserves all components",
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e3, 3.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e3, 3.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Health>(e2, 200);
-  world.addComponentToEntity<Health>(e1, 100);
-  world.addComponentToEntity<Health>(e3, 300);
+  world.addComponent<Health>(e2, 200);
+  world.addComponent<Health>(e1, 100);
+  world.addComponent<Health>(e3, 300);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e2).x == 2.0f);
@@ -222,7 +242,7 @@ TEST_CASE("Column grows without losing components", "[ecs][column]") {
     Entity e = world.createEntity();
     entities.push_back(e);
 
-    world.addComponentToEntity<Position>(e, static_cast<float>(i),
+    world.addComponent<Position>(e, static_cast<float>(i),
                                          static_cast<float>(i + 1),
                                          static_cast<float>(i + 2));
   }
@@ -245,7 +265,7 @@ TEST_CASE("Non-trivial components survive column growth", "[ecs][lifetime]") {
     Entity e = world.createEntity();
     entities.push_back(e);
 
-    world.addComponentToEntity<StringComponent>(e, "component_" +
+    world.addComponent<StringComponent>(e, "component_" +
                                                        std::to_string(i));
   }
 
@@ -266,7 +286,7 @@ TEST_CASE("Components are eventually destroyed", "[ecs][lifetime]") {
     for (int i = 0; i < 100; ++i) {
       Entity e = world.createEntity();
 
-      world.addComponentToEntity<LifetimeComponent>(e, i);
+      world.addComponent<LifetimeComponent>(e, i);
     }
   }
 
@@ -279,9 +299,9 @@ TEST_CASE("Entities with same components share archetype", "[ecs][archetype]") {
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
 
-  world.addComponentToEntity<Position>(e2, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e2, 4.0f, 5.0f, 6.0f);
 
   REQUIRE(&world.getArchetypeForEntity(e1) == &world.getArchetypeForEntity(e2));
 }
@@ -292,11 +312,11 @@ TEST_CASE("Adding multiple components produces correct archetype",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
 
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
 
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Health>(e, 100);
 
   const auto &mask = world.getArchetypeForEntity(e).getMask();
 
@@ -351,7 +371,7 @@ TEST_CASE("Randomized ECS stress test", "[ecs][stress]") {
     switch (action) {
     case 0: // Add Position
       if (!data.hasPosition) {
-        world.addComponentToEntity<Position>(e, op + 1.0f, op + 2.0f,
+        world.addComponent<Position>(e, op + 1.0f, op + 2.0f,
                                              op + 3.0f);
         data.hasPosition = true;
         data.position = {op + 1.0f, op + 2.0f, op + 3.0f};
@@ -359,7 +379,7 @@ TEST_CASE("Randomized ECS stress test", "[ecs][stress]") {
       break;
     case 1: // Add Velocity
       if (!data.hasVelocity) {
-        world.addComponentToEntity<Velocity>(e, op + 10.0f, op + 20.0f,
+        world.addComponent<Velocity>(e, op + 10.0f, op + 20.0f,
                                              op + 30.0f);
         data.hasVelocity = true;
         data.velocity = {op + 10.0f, op + 20.0f, op + 30.0f};
@@ -367,7 +387,7 @@ TEST_CASE("Randomized ECS stress test", "[ecs][stress]") {
       break;
     case 2: // Add Health
       if (!data.hasHealth) {
-        world.addComponentToEntity<Health>(e, op + 100);
+        world.addComponent<Health>(e, op + 100);
         data.hasHealth = true;
         data.health = {op + 100};
       }
@@ -401,16 +421,16 @@ TEST_CASE("Remove components from entities with multiple components",
           "[ecs][remove]") {
   World world;
   Entity e = world.createEntity();
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Health>(e, 100);
   REQUIRE(world.getArchetypeForEntity(e).getMask().test(
       getComponentID<Position>()));
   REQUIRE(world.getArchetypeForEntity(e).getMask().test(
       getComponentID<Velocity>()));
   REQUIRE(
       world.getArchetypeForEntity(e).getMask().test(getComponentID<Health>()));
-  world.removeComponentFromEntity<Velocity>(e);
+  world.removeComponent<Velocity>(e);
   REQUIRE(world.getArchetypeForEntity(e).getMask().test(
       getComponentID<Position>()));
   REQUIRE_FALSE(world.getArchetypeForEntity(e).getMask().test(
@@ -424,10 +444,10 @@ TEST_CASE("Remove component preserves remaining data", "[ecs][remove][data]") {
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
 
-  world.removeComponentFromEntity<Position>(e);
+  world.removeComponent<Position>(e);
 
   auto &at = world.getArchetypeForEntity(e);
 
@@ -447,11 +467,11 @@ TEST_CASE("Remove middle component preserves surrounding data",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Health>(e, 100);
 
-  world.removeComponentFromEntity<Velocity>(e);
+  world.removeComponent<Velocity>(e);
 
   auto &at = world.getArchetypeForEntity(e);
 
@@ -474,11 +494,11 @@ TEST_CASE("Remove first component preserves remaining data",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Health>(e, 100);
 
-  world.removeComponentFromEntity<Position>(e);
+  world.removeComponent<Position>(e);
 
   auto &at = world.getArchetypeForEntity(e);
 
@@ -501,11 +521,11 @@ TEST_CASE("Remove last component preserves remaining data",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Health>(e, 100);
 
-  world.removeComponentFromEntity<Health>(e);
+  world.removeComponent<Health>(e);
 
   auto &at = world.getArchetypeForEntity(e);
 
@@ -533,16 +553,16 @@ TEST_CASE("Remove component from middle entity preserves other entities",
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 1.0f, 1.0f);
-  world.addComponentToEntity<Position>(e2, 2.0f, 2.0f, 2.0f);
-  world.addComponentToEntity<Position>(e3, 3.0f, 3.0f, 3.0f);
+  world.addComponent<Position>(e1, 1.0f, 1.0f, 1.0f);
+  world.addComponent<Position>(e2, 2.0f, 2.0f, 2.0f);
+  world.addComponent<Position>(e3, 3.0f, 3.0f, 3.0f);
 
-  world.addComponentToEntity<Velocity>(e1, 10.0f, 10.0f, 10.0f);
-  world.addComponentToEntity<Velocity>(e2, 20.0f, 20.0f, 20.0f);
-  world.addComponentToEntity<Velocity>(e3, 30.0f, 30.0f, 30.0f);
+  world.addComponent<Velocity>(e1, 10.0f, 10.0f, 10.0f);
+  world.addComponent<Velocity>(e2, 20.0f, 20.0f, 20.0f);
+  world.addComponent<Velocity>(e3, 30.0f, 30.0f, 30.0f);
 
   // e2 is in the middle, so removing its component exercises swap-and-pop.
-  world.removeComponentFromEntity<Velocity>(e2);
+  world.removeComponent<Velocity>(e2);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e2).x == 2.0f);
@@ -560,19 +580,19 @@ TEST_CASE("Remove component from last entity",
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, static_cast<float>(e1), 2.0f, 3.0f);
-  world.addComponentToEntity<Position>(e2, static_cast<float>(e2), 2.0f, 3.0f);
-  world.addComponentToEntity<Position>(e3, static_cast<float>(e3), 2.0f, 3.0f);
+  world.addComponent<Position>(e1, static_cast<float>(e1), 2.0f, 3.0f);
+  world.addComponent<Position>(e2, static_cast<float>(e2), 2.0f, 3.0f);
+  world.addComponent<Position>(e3, static_cast<float>(e3), 2.0f, 3.0f);
 
-  world.addComponentToEntity<Velocity>(e1, static_cast<float>(e1) + 10.0f,
+  world.addComponent<Velocity>(e1, static_cast<float>(e1) + 10.0f,
                                        20.0f, 30.0f);
-  world.addComponentToEntity<Velocity>(e2, static_cast<float>(e2) + 10.0f,
+  world.addComponent<Velocity>(e2, static_cast<float>(e2) + 10.0f,
                                        20.0f, 30.0f);
-  world.addComponentToEntity<Velocity>(e3, static_cast<float>(e3) + 10.0f,
+  world.addComponent<Velocity>(e3, static_cast<float>(e3) + 10.0f,
                                        20.0f, 30.0f);
 
   // e3 is last, so this exercises the non-swap branch.
-  world.removeComponentFromEntity<Velocity>(e3);
+  world.removeComponent<Velocity>(e3);
 
   REQUIRE(world.getComponent<Position>(e1).x == static_cast<float>(e1));
   REQUIRE(world.getComponent<Position>(e2).x == static_cast<float>(e2));
@@ -587,13 +607,13 @@ TEST_CASE("Remove all components from entity", "[ecs][remove][empty]") {
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Health>(e, 100);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Health>(e, 100);
 
-  world.removeComponentFromEntity<Position>(e);
-  world.removeComponentFromEntity<Velocity>(e);
-  world.removeComponentFromEntity<Health>(e);
+  world.removeComponent<Position>(e);
+  world.removeComponent<Velocity>(e);
+  world.removeComponent<Health>(e);
 
   auto &at = world.getArchetypeForEntity(e);
 
@@ -607,12 +627,12 @@ TEST_CASE("Remove and re-add component", "[ecs][remove][readd]") {
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
 
-  world.removeComponentFromEntity<Position>(e);
+  world.removeComponent<Position>(e);
 
-  world.addComponentToEntity<Position>(e, 10.0f, 20.0f, 30.0f);
+  world.addComponent<Position>(e, 10.0f, 20.0f, 30.0f);
 
   Position &p = world.getComponent<Position>(e);
   Velocity &v = world.getComponent<Velocity>(e);
@@ -633,13 +653,13 @@ TEST_CASE("Remove component does not affect other archetypes",
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e1, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e1, 4.0f, 5.0f, 6.0f);
 
-  world.addComponentToEntity<Position>(e2, 10.0f, 20.0f, 30.0f);
-  world.addComponentToEntity<Health>(e2, 100);
+  world.addComponent<Position>(e2, 10.0f, 20.0f, 30.0f);
+  world.addComponent<Health>(e2, 100);
 
-  world.removeComponentFromEntity<Velocity>(e1);
+  world.removeComponent<Velocity>(e1);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e1).y == 2.0f);
@@ -659,13 +679,13 @@ TEST_CASE("Different component removal orders", "[ecs][remove][orders]") {
   Entity e2 = world.createEntity();
 
   for (Entity e : {e1, e2}) {
-    world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-    world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
-    world.addComponentToEntity<Health>(e, 100);
+    world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+    world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
+    world.addComponent<Health>(e, 100);
   }
 
-  world.removeComponentFromEntity<Position>(e1);
-  world.removeComponentFromEntity<Health>(e2);
+  world.removeComponent<Position>(e1);
+  world.removeComponent<Health>(e2);
 
   REQUIRE(world.getArchetypeForEntity(e1).getMask().test(
       getComponentID<Velocity>()));
@@ -690,17 +710,17 @@ TEST_CASE("Removal works with different component insertion orders",
   Entity e2 = world.createEntity();
 
   // Creates Position -> Velocity -> Health.
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e1, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Health>(e1, 100);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e1, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Health>(e1, 100);
 
   // Reaches the same component mask through a different order.
-  world.addComponentToEntity<Health>(e2, 200);
-  world.addComponentToEntity<Velocity>(e2, 40.0f, 50.0f, 60.0f);
-  world.addComponentToEntity<Position>(e2, 10.0f, 20.0f, 30.0f);
+  world.addComponent<Health>(e2, 200);
+  world.addComponent<Velocity>(e2, 40.0f, 50.0f, 60.0f);
+  world.addComponent<Position>(e2, 10.0f, 20.0f, 30.0f);
 
-  world.removeComponentFromEntity<Velocity>(e1);
-  world.removeComponentFromEntity<Position>(e2);
+  world.removeComponent<Velocity>(e1);
+  world.removeComponent<Position>(e2);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e1).y == 2.0f);
@@ -720,9 +740,9 @@ TEST_CASE("querying multiple entities", "[ecs][querying][multiple]") {
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Position>(e2, 4.0f, 5.0f, 6.0f);
-  world.addComponentToEntity<Position>(e3, 7.0f, 8.0f, 9.0f);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(e2, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e3, 7.0f, 8.0f, 9.0f);
 
   int count = 0;
 
@@ -746,9 +766,9 @@ TEST_CASE("querying only matches entities with requested component",
   Entity velocityEntity = world.createEntity();
   Entity emptyEntity = world.createEntity();
 
-  world.addComponentToEntity<Position>(positionEntity, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Position>(positionEntity, 1.0f, 2.0f, 3.0f);
 
-  world.addComponentToEntity<Velocity>(velocityEntity, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Velocity>(velocityEntity, 4.0f, 5.0f, 6.0f);
 
   int count = 0;
   Entity found = 0;
@@ -770,17 +790,17 @@ TEST_CASE("query matches multiple archetypes", "[ecs][querying][archetypes]") {
   Entity positionHealth = world.createEntity();
   Entity allComponents = world.createEntity();
 
-  world.addComponentToEntity<Position>(positionOnly, 1.0f, 1.0f, 1.0f);
+  world.addComponent<Position>(positionOnly, 1.0f, 1.0f, 1.0f);
 
-  world.addComponentToEntity<Position>(positionVelocity, 2.0f, 2.0f, 2.0f);
-  world.addComponentToEntity<Velocity>(positionVelocity, 3.0f, 3.0f, 3.0f);
+  world.addComponent<Position>(positionVelocity, 2.0f, 2.0f, 2.0f);
+  world.addComponent<Velocity>(positionVelocity, 3.0f, 3.0f, 3.0f);
 
-  world.addComponentToEntity<Position>(positionHealth, 4.0f, 4.0f, 4.0f);
-  world.addComponentToEntity<Health>(positionHealth, 40);
+  world.addComponent<Position>(positionHealth, 4.0f, 4.0f, 4.0f);
+  world.addComponent<Health>(positionHealth, 40);
 
-  world.addComponentToEntity<Position>(allComponents, 5.0f, 5.0f, 5.0f);
-  world.addComponentToEntity<Velocity>(allComponents, 6.0f, 6.0f, 6.0f);
-  world.addComponentToEntity<Health>(allComponents, 50);
+  world.addComponent<Position>(allComponents, 5.0f, 5.0f, 5.0f);
+  world.addComponent<Velocity>(allComponents, 6.0f, 6.0f, 6.0f);
+  world.addComponent<Health>(allComponents, 50);
 
   int count = 0;
 
@@ -804,12 +824,12 @@ TEST_CASE("query multiple components", "[ecs][querying][multiple-components]") {
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e1, 10.0f, 20.0f, 30.0f);
+  world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e1, 10.0f, 20.0f, 30.0f);
 
-  world.addComponentToEntity<Position>(e2, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e2, 4.0f, 5.0f, 6.0f);
 
-  world.addComponentToEntity<Velocity>(e3, 40.0f, 50.0f, 60.0f);
+  world.addComponent<Velocity>(e3, 40.0f, 50.0f, 60.0f);
 
   int count = 0;
 
@@ -844,16 +864,16 @@ TEST_CASE("query multiple components across multiple archetypes",
   Entity e3 = world.createEntity();
 
   // Position + Velocity
-  world.addComponentToEntity<Position>(e1, 1.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(e1, 10.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(e1, 10.0f, 0.0f, 0.0f);
 
   // Position + Velocity + Health
-  world.addComponentToEntity<Position>(e2, 2.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(e2, 20.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Health>(e2, 100);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(e2, 20.0f, 0.0f, 0.0f);
+  world.addComponent<Health>(e2, 100);
 
   // Position only
-  world.addComponentToEntity<Position>(e3, 3.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e3, 3.0f, 0.0f, 0.0f);
 
   int count = 0;
 
@@ -883,7 +903,7 @@ TEST_CASE("query visits every matching entity exactly once",
     Entity e = world.createEntity();
     entities.push_back(e);
 
-    world.addComponentToEntity<Position>(e, static_cast<float>(i), 0.0f, 0.0f);
+    world.addComponent<Position>(e, static_cast<float>(i), 0.0f, 0.0f);
   }
 
   int count = 0;
@@ -900,9 +920,9 @@ TEST_CASE("query returns correct entity alongside component",
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 10.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 10.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e2, 20.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 20.0f, 0.0f, 0.0f);
 
   world.each<Position>([&](Entity e, Position &p) {
     if (e == e1) {
@@ -922,12 +942,12 @@ TEST_CASE("query works after adding components and moving entities",
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
 
   // e1 moves from {Position} to {Position, Velocity}.
-  world.addComponentToEntity<Velocity>(e1, 10.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(e1, 10.0f, 0.0f, 0.0f);
 
   int count = 0;
 
@@ -947,13 +967,13 @@ TEST_CASE("query works after removing components", "[ecs][querying][removal]") {
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(e1, 10.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(e1, 10.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
 
   // e1 becomes Position-only.
-  world.removeComponentFromEntity<Velocity>(e1);
+  world.removeComponent<Velocity>(e1);
 
   int count = 0;
 
@@ -974,14 +994,14 @@ TEST_CASE("query multiple components after component removal",
   Entity e1 = world.createEntity();
   Entity e2 = world.createEntity();
 
-  world.addComponentToEntity<Position>(e1, 1.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(e1, 10.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(e1, 10.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(e2, 2.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(e2, 20.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(e2, 20.0f, 0.0f, 0.0f);
 
   // e1 no longer matches Position + Velocity.
-  world.removeComponentFromEntity<Velocity>(e1);
+  world.removeComponent<Velocity>(e1);
 
   int count = 0;
 
@@ -1005,8 +1025,8 @@ TEST_CASE("query can modify all requested components",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(e, 1.0f, 2.0f, 3.0f);
-  world.addComponentToEntity<Velocity>(e, 4.0f, 5.0f, 6.0f);
+  world.addComponent<Position>(e, 1.0f, 2.0f, 3.0f);
+  world.addComponent<Velocity>(e, 4.0f, 5.0f, 6.0f);
 
   world.each<Position, Velocity>([](Entity, Position &p, Velocity &v) {
     p.x += v.x;
@@ -1039,14 +1059,14 @@ TEST_CASE("query ignores entities without required components",
   Entity both = world.createEntity();
   Entity healthOnly = world.createEntity();
 
-  world.addComponentToEntity<Position>(positionOnly, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(positionOnly, 1.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Velocity>(velocityOnly, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(velocityOnly, 2.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(both, 3.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(both, 4.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(both, 3.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(both, 4.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Health>(healthOnly, 100);
+  world.addComponent<Health>(healthOnly, 100);
 
   int count = 0;
 
@@ -1077,19 +1097,19 @@ TEST_CASE("query works with entities distributed across many archetypes",
   Entity positionHealth = world.createEntity();
   Entity positionVelocityHealth = world.createEntity();
 
-  world.addComponentToEntity<Position>(positionOnly, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(positionOnly, 1.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(positionVelocity, 2.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Velocity>(positionVelocity, 20.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(positionVelocity, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Velocity>(positionVelocity, 20.0f, 0.0f, 0.0f);
 
-  world.addComponentToEntity<Position>(positionHealth, 3.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Health>(positionHealth, 30);
+  world.addComponent<Position>(positionHealth, 3.0f, 0.0f, 0.0f);
+  world.addComponent<Health>(positionHealth, 30);
 
-  world.addComponentToEntity<Position>(positionVelocityHealth, 4.0f, 0.0f,
+  world.addComponent<Position>(positionVelocityHealth, 4.0f, 0.0f,
                                        0.0f);
-  world.addComponentToEntity<Velocity>(positionVelocityHealth, 40.0f, 0.0f,
+  world.addComponent<Velocity>(positionVelocityHealth, 40.0f, 0.0f,
                                        0.0f);
-  world.addComponentToEntity<Health>(positionVelocityHealth, 40);
+  world.addComponent<Health>(positionVelocityHealth, 40);
 
   int count = 0;
   float sum = 0.0f;
@@ -1113,17 +1133,17 @@ TEST_CASE("query remains correct after swap and pop migrations",
   Entity e4 = world.createEntity();
 
   // Put all four in the same archetype.
-  world.addComponentToEntity<Position>(
+  world.addComponent<Position>(
       e1, 1.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Position>(
+  world.addComponent<Position>(
       e2, 2.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Position>(
+  world.addComponent<Position>(
       e3, 3.0f, 0.0f, 0.0f);
-  world.addComponentToEntity<Position>(
+  world.addComponent<Position>(
       e4, 4.0f, 0.0f, 0.0f);
 
   // Removing this causes another entity to be moved into e2's old slot.
-  world.removeComponentFromEntity<Position>(e2);
+  world.removeComponent<Position>(e2);
 
   int count = 0;
   float sum = 0.0f;
@@ -1147,10 +1167,10 @@ TEST_CASE("query component order does not depend on column order",
 
   Entity e = world.createEntity();
 
-  world.addComponentToEntity<Position>(
+  world.addComponent<Position>(
       e, 1.0f, 2.0f, 3.0f);
 
-  world.addComponentToEntity<Velocity>(
+  world.addComponent<Velocity>(
       e, 10.0f, 20.0f, 30.0f);
 
   world.each<Velocity, Position>(
@@ -1167,3 +1187,66 @@ TEST_CASE("query component order does not depend on column order",
       });
 }
 
+TEST_CASE("Reusing entity ID after swap-and-pop preserves archetype state",
+          "[ecs][reuse][swap-pop]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+  Entity e3 = world.createEntity();
+
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e3, 3.0f, 0.0f, 0.0f);
+
+  // Removing e2 moves e3 into e2's old row.
+  world.removeEntity(e2);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
+
+  Entity e4 = world.createEntity();
+
+  REQUIRE(e4 == e2);
+  REQUIRE_FALSE(world.hasComponent<Position>(e4));
+
+  // Make sure the reused entity can be inserted normally.
+  world.addComponent<Position>(e4, 40.0f, 0.0f, 0.0f);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
+  REQUIRE(world.getComponent<Position>(e4).x == 40.0f);
+}
+
+TEST_CASE("Reusing entity ID after archetype migration",
+          "[ecs][reuse][migration]") {
+  World world;
+
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+  Entity e3 = world.createEntity();
+
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e3, 3.0f, 0.0f, 0.0f);
+
+  // Move e2 to Position + Health.
+  world.addComponent<Health>(e2, 200);
+
+  world.removeEntity(e2);
+
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
+
+  Entity e4 = world.createEntity();
+
+  REQUIRE(e4 == e2);
+  REQUIRE_FALSE(world.hasComponent<Position>(e4));
+  REQUIRE_FALSE(world.hasComponent<Health>(e4));
+
+  world.addComponent<Health>(e4, 400);
+
+  REQUIRE(world.getComponent<Health>(e4).hearts == 400);
+  REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
+  REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
+}
