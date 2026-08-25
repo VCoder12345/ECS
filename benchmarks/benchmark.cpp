@@ -183,8 +183,9 @@ static void BM_CreateEntities(benchmark::State& state) {
 }
 
 BENCHMARK(BM_CreateEntities)
-    ->RangeMultiplier(4)
-    ->Range(1024, 1 << 18);
+    ->Args({4096})
+    ->Args({65536})
+    ->Args({262144});
 
 
 // ------------------------------------------------------------
@@ -216,8 +217,8 @@ static void BM_AddPosition(benchmark::State& state) {
 }
 
 BENCHMARK(BM_AddPosition)
-    ->RangeMultiplier(4)
-    ->Range(1024, 1 << 16);
+    ->Args({4096})
+    ->Args({65536});
 
 
 // ------------------------------------------------------------
@@ -270,8 +271,8 @@ static void BM_AddVelocityMigration(
 }
 
 BENCHMARK(BM_AddVelocityMigration)
-    ->RangeMultiplier(4)
-    ->Range(1024, 1 << 16);
+    ->Args({4096})
+    ->Args({65536});
 
 
 // ------------------------------------------------------------
@@ -301,8 +302,9 @@ static void BM_EachPosition(benchmark::State& state) {
 }
 
 BENCHMARK(BM_EachPosition)
-    ->RangeMultiplier(4)
-    ->Range(1024, 1 << 20);
+    ->Args({4096})
+    ->Args({65536})
+    ->Args({1048576});
 
 
 // ------------------------------------------------------------
@@ -334,8 +336,9 @@ static void BM_EachPositionVelocity(
 }
 
 BENCHMARK(BM_EachPositionVelocity)
-    ->RangeMultiplier(4)
-    ->Range(1024, 1 << 20);
+    ->Args({4096})
+    ->Args({65536})
+    ->Args({1048576});
 
 
 // ------------------------------------------------------------
@@ -379,8 +382,9 @@ static void BM_EachPositionManyArchetypes(
 }
 
 BENCHMARK(BM_EachPositionManyArchetypes)
-    ->RangeMultiplier(4)
-    ->Range(64, 1 << 16);
+    ->Args({64})
+    ->Args({4096})
+    ->Args({65536});
 
 
 // ------------------------------------------------------------
@@ -422,8 +426,9 @@ static void BM_EachPositionVelocityManyArchetypes(
 }
 
 BENCHMARK(BM_EachPositionVelocityManyArchetypes)
-    ->RangeMultiplier(4)
-    ->Range(64, 1 << 16);
+    ->Args({64})
+    ->Args({4096})
+    ->Args({65536});
 
 
 // ------------------------------------------------------------
@@ -464,8 +469,9 @@ static void BM_RawArraysPositionVelocity(
 }
 
 BENCHMARK(BM_RawArraysPositionVelocity)
-    ->RangeMultiplier(4)
-    ->Range(1024, 1 << 20);
+    ->Args({4096})
+    ->Args({65536})
+    ->Args({1048576});
 
 
 // ------------------------------------------------------------

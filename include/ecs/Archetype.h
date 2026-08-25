@@ -99,12 +99,28 @@ public:
     entities.push_back(e);
   }
 
+  template <typename T> Column &getColumn() {
+    ZoneScoped;
+    ComponentID id = getComponentID<T>();
+    assert(compColumnMap.find(id) != compColumnMap.end());
+    assert(mask.test(id));
+    size_t colIndex = compColumnMap[id];
+    return columns[colIndex];
+  }
+
   // TODO: add error handling for non-existent entity or component
   template <typename T> T &getComponentAt(size_t index) {
     ZoneScoped;
-    Column &col = columns[compColumnMap[getComponentID<T>()]];
+    Column &col = getColumn<T>();
 
     return col.get<T>(index);
+  }
+
+  template <typename T> ColumnIterator<T> getColumnIterator() {
+    ZoneScoped;
+    Column &col = getColumn<T>();
+
+    return col.getIterator<T>();
   }
 
   template <typename T> T &getComponent(Entity e) {
@@ -187,12 +203,19 @@ public:
 
   template <typename... Components, typename F> void eachEntity(F &&func) {
     ZoneScoped;
+
+    auto componentIters = std::tuple {
+      getColumnIterator<Components>()...
+    };
+
     // NOTE: we assume that entities and columns are structured in the same way
     // i.e. entity on index 2 has column data for each column at index 2
     for (size_t i = 0; i < entities.size(); ++i) {
       Entity e = entities[i];
-
-      func(e, getComponentAt<Components>(i)...);
+      
+      std::apply ([&](auto &...iters) {
+        func(e, iters.getAndNext()...);
+      }, componentIters);
     }
   }
 

@@ -18,7 +18,27 @@ public:
   }
 };
 
-// TODO: throw error if column has reached maximum size (size_t max value) and we try to add more elements
+// A class that provides an iterator for a column of components of a specific type
+template <typename T> class ColumnIterator {
+public:
+  ColumnIterator(char *ptr, size_t colSize) : ptr(ptr), colSize(colSize) {}
+  T &get() { return *reinterpret_cast<T *>(ptr); }
+  T& getAndNext() {
+    T& current = *reinterpret_cast<T *>(ptr);
+    next();
+    return current;
+  }
+
+  void next() { ptr += sizeof(T); }
+  size_t size() const { return colSize; }
+
+private:
+  char *ptr;
+  const size_t colSize;
+};
+
+// TODO: throw error if column has reached maximum size (size_t max value) and
+// we try to add more elements
 
 // A class that represents a column of components of a specific type in an
 // archetype.
@@ -113,6 +133,13 @@ public:
   }
 
   size_t getSize() const;
+
+  template <typename T> ColumnIterator<T> getIterator() {
+    assert(sizeof(T) == elementSize);
+    assert(compId == getComponentID<T>());
+    assert(alignof(T) == alignment);
+    return ColumnIterator<T>(static_cast<char *>(data), size);
+  }
 
 private:
   void *data = nullptr;
