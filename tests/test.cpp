@@ -1257,24 +1257,211 @@ TEST_CASE("Reusing entity ID after archetype migration",
   REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
 }
 
-// TEST_CASE("Deferred each", "[ecs][deferred][each]") {
-//   World world;
-//   Entity e = world.createEntity();
-//   world.addComponent<Position>(e, 0.0f, 0.0f, 0.0f);
-//
-//   eachDeferred<Position>(world, [&](WorldCtxt& ctxt, Entity entity, Position &p) {
-//     p.x = 10.0f;
-//     p.y = 20.0f;
-//     p.z = 30.0f;
-//
-//     if (p.x > 5.0f) {
-//       ctxt.addComponent<Velocity>(entity, 1.0f, 2.0f, 3.0f);
-//     }
-//   });
-//
-//   REQUIRE(world.getComponent<Position>(e).x == 10.0f);
-//   REQUIRE(world.getComponent<Position>(e).y == 20.0f);
-//   REQUIRE(world.getComponent<Position>(e).z == 30.0f);
-//   
-//   REQUIRE(world.getComponent<Velocity>(e).x == 1.0f);
-// }
+TEST_CASE("Deferred each", "[ecs][deferred][each]") {
+  World world;
+  Entity e = world.createEntity();
+  world.addComponent<Position>(e, 0.0f, 0.0f, 0.0f);
+
+  eachDeferred<Position>(world, [&](WorldCtxt& ctxt, Entity entity, Position &p) {
+    p.x = 10.0f;
+    p.y = 20.0f;
+    p.z = 30.0f;
+
+    if (p.x > 5.0f) {
+      ctxt.addComponent<Velocity>(entity, 1.0f, 2.0f, 3.0f);
+    }
+  });
+
+  REQUIRE(world.getComponent<Position>(e).x == 10.0f);
+  REQUIRE(world.getComponent<Position>(e).y == 20.0f);
+  REQUIRE(world.getComponent<Position>(e).z == 30.0f);
+  
+  REQUIRE(world.getComponent<Velocity>(e).x == 1.0f);
+}
+
+TEST_CASE("Deferred create is not materialized until flush",
+          "[ecs][deferred][create]") {
+  World world;
+  Entity trigger = world.createEntity();
+  world.addComponent<Position>(trigger, 0.0f, 0.0f, 0.0f);
+
+  Entity spawned{};
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity, Position &) {
+    spawned = ctx.createEntity(world);
+  });
+
+  // After flush, it should exist with no components.
+  REQUIRE(world.isAlive(spawned));
+  REQUIRE_FALSE(world.hasComponent<Position>(spawned));
+}
+
+TEST_CASE("Deferred destroy does not remove the entity until flush",
+          "[ecs][deferred][destroy]") {
+  World world;
+  Entity e = world.createEntity();
+  world.addComponent<Position>(e, 1.0f, 0.0f, 0.0f);
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity entity, Position &) {
+    ctx.destroyEntity(entity);
+  });
+
+  REQUIRE_FALSE(world.isAlive(e));
+}
+
+TEST_CASE("Entity created and given a component in the same batch",
+          "[ecs][deferred][ordering]") {
+  World world;
+  Entity trigger = world.createEntity();
+  world.addComponent<Position>(trigger, 0.0f, 0.0f, 0.0f);
+
+  Entity spawned{};
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity, Position &) {
+    spawned = ctx.createEntity(world);
+    ctx.addComponent<Health>(spawned, 50); // targets a not-yet-materialized entity
+  });
+
+  REQUIRE(world.isAlive(spawned));
+  REQUIRE(world.getComponent<Health>(spawned).hearts == 50);
+}
+
+TEST_CASE("Deferred destroy of a middle entity does not disturb the current iteration",
+          "[ecs][deferred][safety][swap-pop]") {
+  World world;
+  Entity e1 = world.createEntity();
+  Entity e2 = world.createEntity();
+  Entity e3 = world.createEntity();
+
+  world.addComponent<Position>(e1, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e2, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(e3, 3.0f, 0.0f, 0.0f);
+
+  int visited = 0;
+  float sum = 0.0f;
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity e, Position &p) {
+    ++visited;
+    sum += p.x;
+    if (e == e2) ctx.destroyEntity(e2); // would swap e3 into this slot if immediate
+  });
+
+  // If removal weren't deferred, e3 would get swapped into e2's slot mid-loop
+  // and either be skipped or double-visited. Neither happened here.
+  REQUIRE(visited == 3);
+  REQUIRE(sum == 6.0f);
+  REQUIRE_FALSE(world.isAlive(e2));
+  REQUIRE(world.isAlive(e1));
+  REQUIRE(world.isAlive(e3));
+}
+
+TEST_CASE("Deferred addComponent across many entities does not corrupt an ongoing archetype iteration",
+          "[ecs][deferred][safety][archetype-move]") {
+  World world;
+  constexpr int entityCount = 100;
+  std::vector<Entity> entities;
+
+  for (int i = 0; i < entityCount; ++i) {
+    Entity e = world.createEntity();
+    world.addComponent<Position>(e, static_cast<float>(i), 0.0f, 0.0f);
+    entities.push_back(e);
+  }
+
+  int visited = 0;
+
+  // Every entity migrates Position -> Position+Health. If this ran
+  // immediately, archetypes.emplace_back on the first migration could
+  // reallocate the vector out from under World::each's `Archetype&`.
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity e, Position &p) {
+    ++visited;
+    ctx.addComponent<Health>(e, static_cast<int>(p.x));
+  });
+
+  REQUIRE(visited == entityCount);
+  for (int i = 0; i < entityCount; ++i) {
+    REQUIRE(world.getComponent<Position>(entities[i]).x == static_cast<float>(i));
+    REQUIRE(world.getComponent<Health>(entities[i]).hearts == i);
+  }
+}
+
+TEST_CASE("A visited entity can queue commands against a different entity",
+          "[ecs][deferred][cross-entity]") {
+  World world;
+  Entity a = world.createEntity();
+  Entity b = world.createEntity();
+
+  world.addComponent<Position>(a, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(b, 2.0f, 0.0f, 0.0f);
+  world.addComponent<Health>(b, 10);
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity e, Position &) {
+    if (e == a) ctx.removeComponent<Health>(b);
+  });
+
+  REQUIRE_FALSE(world.hasComponent<Health>(b));
+  REQUIRE(world.hasComponent<Position>(b));
+}
+
+TEST_CASE("Deferred addComponent has exactly the expected construct/move count",
+          "[ecs][deferred][lifetime]") {
+  LifetimeComponent::reset();
+  World world;
+  Entity e = world.createEntity();
+  world.addComponent<Position>(e, 0.0f, 0.0f, 0.0f);
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity entity, Position &) {
+    ctx.addComponent<LifetimeComponent>(entity, 42);
+  });
+
+  REQUIRE(world.getComponent<LifetimeComponent>(e).value == 42);
+
+  // value-ctor (record) + move into the pair (record) + move into the
+  // column (flush) = 3 constructions total, 2 of them moves.
+  REQUIRE(LifetimeComponent::constructed == 3);
+  REQUIRE(LifetimeComponent::moved == 2);
+  // destroyed: the record-time temporary, plus the queue's moved-from
+  // leftover once WorldCtxt goes out of scope. The one in the archetype
+  // column is still alive, so destroyed should trail constructed by 1.
+  REQUIRE(LifetimeComponent::destroyed == LifetimeComponent::constructed - 1);
+}
+
+TEST_CASE("Component command against an entity destroyed in the same batch does not corrupt other entities",
+          "[ecs][deferred][safety][stale-entity]") {
+  World world;
+  Entity victim = world.createEntity();
+  Entity bystander = world.createEntity();
+
+  world.addComponent<Position>(victim, 1.0f, 0.0f, 0.0f);
+  world.addComponent<Position>(bystander, 2.0f, 0.0f, 0.0f);
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity e, Position &) {
+    if (e == victim) {
+      ctx.addComponent<Health>(victim, 999);
+      ctx.destroyEntity(victim);
+    }
+  });
+
+  REQUIRE_FALSE(world.isAlive(victim));
+  REQUIRE(world.getComponent<Position>(bystander).x == 2.0f);
+  REQUIRE_FALSE(world.hasComponent<Health>(bystander));
+}
+
+TEST_CASE("Entity created and destroyed within the same batch does not leak its index",
+          "[ecs][deferred][create][destroy]") {
+  World world;
+  Entity trigger = world.createEntity();
+  world.addComponent<Position>(trigger, 0.0f, 0.0f, 0.0f);
+
+  Entity spawned{};
+
+  eachDeferred<Position>(world, [&](WorldCtxt &ctx, Entity, Position &) {
+    spawned = ctx.createEntity(world);
+    ctx.destroyEntity(spawned); // dies before ever being materialized
+  });
+
+  REQUIRE_FALSE(world.isAlive(spawned));
+
+  Entity recycled = world.createEntity();
+  REQUIRE(recycled.index == spawned.index);
+  REQUIRE(recycled != spawned); // generation must have moved on
+}

@@ -19,7 +19,10 @@ public:
 
   void removeEntity(Entity e);
 
+  bool isAlive(Entity e) const;
+
   template <typename T> T &getComponent(Entity e) {
+    assert(isAlive(e));
     Archetype &at = getArchetypeForEntity(e);
     return at.getComponent<T>(e);
   }
@@ -28,6 +31,7 @@ public:
   template <typename T, typename... Args>
   T &addComponent(Entity e, Args &&...args) {
     ZoneScoped;
+    assert(isAlive(e));
     size_t oldAtId = entityToAtIdMap[e.index];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);
@@ -59,6 +63,8 @@ public:
   // remove a component from an entity, moving it to the correct archetype
   template <typename T> void removeComponent(Entity e) {
     ZoneScoped;
+
+    assert(isAlive(e));
     size_t oldAtId = entityToAtIdMap[e.index];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);

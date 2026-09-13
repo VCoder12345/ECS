@@ -17,13 +17,26 @@ public:
   std::vector<std::pair<Entity, T>> addQueue;
   std::vector<Entity> removeQueue;
 
-  void flush(World &world) override {}
+  void flush(World &world) override {
+    for (auto &[e, comp] : addQueue) {
+      if (world.isAlive(e))
+        world.addComponent<T>(e, std::move(comp));
+    }
+
+    for (Entity e : removeQueue) {
+      if (world.isAlive(e))
+        world.removeComponent<T>(e);
+    }
+  }
 };
 
 class WorldCtxt {
 public:
-  Entity createEntity() { 
-    return {0, 0}; 
+  Entity createEntity(World &world) { 
+    Entity e = world.genEntityId();
+
+    createQueue.push_back(e);
+    return e;
   }
 
   void destroyEntity(Entity e) {
@@ -39,7 +52,20 @@ public:
     getAddQueue<T>().addQueue.emplace_back(e, T(std::forward<Args>(args)...));
   }
 
-  void flush(World &world) {}
+  void flush(World &world) {
+    for (Entity e : createQueue) {
+      world.materializeEntity(e);
+    }
+
+    for (Entity e : removeQueue) {
+      if (world.isAlive(e))
+        world.removeEntity(e);
+    }
+
+    for (auto &[id, queue] : compQueues) {
+      queue->flush(world);
+    }
+  }
 
 private:
   std::unordered_map<ComponentID, std::unique_ptr<ICompQueue>> compQueues;

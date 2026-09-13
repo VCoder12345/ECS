@@ -46,6 +46,7 @@ void World::materializeEntity(Entity e) {
 
 // Remove an entity from the world, returning its id to the pool of unused ids
 void World::removeEntity(Entity e) {
+  assert(isAlive(e));
   unusedEntityIds.push_back(e.index);
   entityGenerations[e.index]++; // increment generation to invalidate old
                                 // references
@@ -53,6 +54,10 @@ void World::removeEntity(Entity e) {
   getArchetypeForEntity(e).removeEntity(e);
 
   entityToAtIdMap[e.index] = 0;
+}
+bool World::isAlive(Entity e) const {
+  return e.index < entityGenerations.size() &&
+         entityGenerations[e.index] == e.generation;
 }
 
 Archetype &World::getArchetypeForEntity(Entity e) {
