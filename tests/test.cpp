@@ -5,6 +5,8 @@
 #include <ecs/Archetype.h>
 #include <ecs/World.h>
 
+#include <ecs/Deferred.h>
+
 #include <random>
 
 using Catch::Matchers::WithinAbs;
@@ -57,17 +59,18 @@ TEST_CASE("Entities receive unique IDs", "[ecs]") {
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  REQUIRE(e1 != e2);
-  REQUIRE(e2 != e3);
-  REQUIRE(e1 != e3);
+  REQUIRE(e1.index != e2.index);
+  REQUIRE(e2.index != e3.index);
+  REQUIRE(e1.index != e3.index);
 
-  REQUIRE(e1 + 1 == e2);
-  REQUIRE(e2 + 1 == e3);
+  REQUIRE(e1.index + 1 == e2.index);
+  REQUIRE(e2.index + 1 == e3.index);
 
   world.removeEntity(e2);
   Entity e4 = world.createEntity(); // should reuse e2's ID
 
-  REQUIRE(e4 == e2);
+  REQUIRE(e4.index == e2.index);
+  REQUIRE(e4 != e2);
 }
 
 
@@ -177,7 +180,8 @@ TEST_CASE ("Reusing entity IDs preserves component data", "[ecs][reuse]") {
   world.addComponent<Position>(e1, 1.0f, 2.0f, 3.0f);
   world.removeEntity(e1);
   Entity e2 = world.createEntity(); // should reuse e1's ID
-  REQUIRE(e2 == e1);
+  REQUIRE(e2.index == e1.index);
+  REQUIRE(e2 != e1); // generations should differ
   // The new entity should not have the old component data
   REQUIRE(!world.hasComponent<Position>(e2));
 }
@@ -580,26 +584,26 @@ TEST_CASE("Remove component from last entity",
   Entity e2 = world.createEntity();
   Entity e3 = world.createEntity();
 
-  world.addComponent<Position>(e1, static_cast<float>(e1), 2.0f, 3.0f);
-  world.addComponent<Position>(e2, static_cast<float>(e2), 2.0f, 3.0f);
-  world.addComponent<Position>(e3, static_cast<float>(e3), 2.0f, 3.0f);
+  world.addComponent<Position>(e1, static_cast<float>(e1.index), 2.0f, 3.0f);
+  world.addComponent<Position>(e2, static_cast<float>(e2.index), 2.0f, 3.0f);
+  world.addComponent<Position>(e3, static_cast<float>(e3.index), 2.0f, 3.0f);
 
-  world.addComponent<Velocity>(e1, static_cast<float>(e1) + 10.0f,
+  world.addComponent<Velocity>(e1, static_cast<float>(e1.index) + 10.0f,
                                        20.0f, 30.0f);
-  world.addComponent<Velocity>(e2, static_cast<float>(e2) + 10.0f,
+  world.addComponent<Velocity>(e2, static_cast<float>(e2.index) + 10.0f,
                                        20.0f, 30.0f);
-  world.addComponent<Velocity>(e3, static_cast<float>(e3) + 10.0f,
+  world.addComponent<Velocity>(e3, static_cast<float>(e3.index) + 10.0f,
                                        20.0f, 30.0f);
 
   // e3 is last, so this exercises the non-swap branch.
   world.removeComponent<Velocity>(e3);
 
-  REQUIRE(world.getComponent<Position>(e1).x == static_cast<float>(e1));
-  REQUIRE(world.getComponent<Position>(e2).x == static_cast<float>(e2));
-  REQUIRE(world.getComponent<Position>(e3).x == static_cast<float>(e3));
+  REQUIRE(world.getComponent<Position>(e1).x == static_cast<float>(e1.index));
+  REQUIRE(world.getComponent<Position>(e2).x == static_cast<float>(e2.index));
+  REQUIRE(world.getComponent<Position>(e3).x == static_cast<float>(e3.index));
 
-  REQUIRE(world.getComponent<Velocity>(e1).x == static_cast<float>(e1) + 10.0f);
-  REQUIRE(world.getComponent<Velocity>(e2).x == static_cast<float>(e2) + 10.0f);
+  REQUIRE(world.getComponent<Velocity>(e1).x == static_cast<float>(e1.index) + 10.0f);
+  REQUIRE(world.getComponent<Velocity>(e2).x == static_cast<float>(e2.index) + 10.0f);
 }
 
 TEST_CASE("Remove all components from entity", "[ecs][remove][empty]") {
@@ -771,7 +775,7 @@ TEST_CASE("querying only matches entities with requested component",
   world.addComponent<Velocity>(velocityEntity, 4.0f, 5.0f, 6.0f);
 
   int count = 0;
-  Entity found = 0;
+  Entity found {};
 
   world.each<Position>([&](Entity e, Position &) {
     ++count;
@@ -1207,7 +1211,8 @@ TEST_CASE("Reusing entity ID after swap-and-pop preserves archetype state",
 
   Entity e4 = world.createEntity();
 
-  REQUIRE(e4 == e2);
+  REQUIRE(e4.index == e2.index);
+  REQUIRE(e4.generation == e2.generation + 1);
   REQUIRE_FALSE(world.hasComponent<Position>(e4));
 
   // Make sure the reused entity can be inserted normally.
@@ -1240,7 +1245,8 @@ TEST_CASE("Reusing entity ID after archetype migration",
 
   Entity e4 = world.createEntity();
 
-  REQUIRE(e4 == e2);
+  REQUIRE(e4.index == e2.index);
+  REQUIRE(e4.generation == e2.generation + 1);
   REQUIRE_FALSE(world.hasComponent<Position>(e4));
   REQUIRE_FALSE(world.hasComponent<Health>(e4));
 
@@ -1250,3 +1256,25 @@ TEST_CASE("Reusing entity ID after archetype migration",
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);
   REQUIRE(world.getComponent<Position>(e3).x == 3.0f);
 }
+
+// TEST_CASE("Deferred each", "[ecs][deferred][each]") {
+//   World world;
+//   Entity e = world.createEntity();
+//   world.addComponent<Position>(e, 0.0f, 0.0f, 0.0f);
+//
+//   eachDeferred<Position>(world, [&](WorldCtxt& ctxt, Entity entity, Position &p) {
+//     p.x = 10.0f;
+//     p.y = 20.0f;
+//     p.z = 30.0f;
+//
+//     if (p.x > 5.0f) {
+//       ctxt.addComponent<Velocity>(entity, 1.0f, 2.0f, 3.0f);
+//     }
+//   });
+//
+//   REQUIRE(world.getComponent<Position>(e).x == 10.0f);
+//   REQUIRE(world.getComponent<Position>(e).y == 20.0f);
+//   REQUIRE(world.getComponent<Position>(e).z == 30.0f);
+//   
+//   REQUIRE(world.getComponent<Velocity>(e).x == 1.0f);
+// }

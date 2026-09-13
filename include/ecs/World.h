@@ -14,6 +14,9 @@ public:
 
   Entity createEntity();
 
+  Entity genEntityId();
+  void materializeEntity(Entity e);
+
   void removeEntity(Entity e);
 
   template <typename T> T &getComponent(Entity e) {
@@ -25,7 +28,7 @@ public:
   template <typename T, typename... Args>
   T &addComponent(Entity e, Args &&...args) {
     ZoneScoped;
-    size_t oldAtId = entityToAtIdMap[e];
+    size_t oldAtId = entityToAtIdMap[e.index];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);
     newMask.set(getComponentID<T>());
@@ -47,7 +50,7 @@ public:
     // move data from the old archetype to the new one
     archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
 
-    entityToAtIdMap[e] = newAtId;
+    entityToAtIdMap[e.index] = newAtId;
 
     // add the new component to the new archetype
     return archetypes[newAtId].addDataToColumn<T>(std::forward<Args>(args)...);
@@ -56,7 +59,7 @@ public:
   // remove a component from an entity, moving it to the correct archetype
   template <typename T> void removeComponent(Entity e) {
     ZoneScoped;
-    size_t oldAtId = entityToAtIdMap[e];
+    size_t oldAtId = entityToAtIdMap[e.index];
     const ComponentMask &oldMask = archetypes[oldAtId].getMask();
     ComponentMask newMask(oldMask);
     ComponentID compId = getComponentID<T>();
@@ -80,7 +83,7 @@ public:
 
     archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
 
-    entityToAtIdMap[e] = newAtId;
+    entityToAtIdMap[e.index] = newAtId;
   }
 
   Archetype &getArchetypeForEntity(Entity e);
@@ -112,5 +115,6 @@ private:
 
   int counter = 0;
 
-  std::vector<Entity> unusedEntityIds;
+  std::vector<EntityIndex> unusedEntityIds;
+  std::vector<uint32_t> entityGenerations;
 };
