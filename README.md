@@ -43,6 +43,9 @@ eachDeferred<Position, Health>(world,
 
 ## Building
 
+The project uses CMake presets for **Debug**, **Release**, **Benchmark**, and **Profiling**
+
+For example:
 ```sh
 cmake --preset debug
 cmake --build --preset debug
