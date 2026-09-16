@@ -163,6 +163,7 @@ TEST_CASE("Multiple entities preserve their component data",
   REQUIRE(world.getComponent<Position>(e2).y == 5.0f);
   REQUIRE(world.getComponent<Position>(e2).z == 6.0f);
 
+
   world.removeEntity(e2);
 
   REQUIRE(world.getComponent<Position>(e1).x == 1.0f);

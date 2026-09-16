@@ -4,6 +4,7 @@
 #include <ecs/Utility.h>
 
 #include <cassert>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -89,14 +90,13 @@ public:
     return archetype;
   }
 
-  size_t getColumnIndex(Entity e) { return entityColumnMap[e]; }
-
   // Add an entity to the archetype, mapping it to the next available index in
   // the columns
-  void addEntity(Entity e) {
+  size_t addEntity(Entity e) {
     ZoneScoped;
-    entityColumnMap.insert({e, entities.size()});
     entities.push_back(e);
+
+    return entities.size() - 1;
   }
 
   template <typename T> Column &getColumn() {
@@ -123,49 +123,47 @@ public:
     return col.getIterator<T>();
   }
 
-  template <typename T> T &getComponent(Entity e) {
+  template <typename T> T &getComponent(size_t row) {
     ZoneScoped;
-    size_t index = entityColumnMap[e];
 
-    return getComponentAt<T>(index);
+    return getComponentAt<T>(row);
   }
 
-
-  void removeEntity(Entity e) {
+  std::optional<Entity> removeEntity(size_t row) {
     ZoneScoped;
     assert(entities.size() > 0);
-    size_t index = entityColumnMap[e];
 
     // remove the components for the entity from each column
     for (Column &col : columns) {
-      col.removeAt(index);
+      col.removeAt(row);
     }
 
-    removeEntityAt(e, index);
+    return removeEntityAt(row);
   }
 
   // Move the entity into oAt, transferring components shared by both
   // archetypes and destroying components that are absent from oAt.
-  void swapAndPopColsInto(Entity e, Archetype &oAt) {
+  // returns the row where the entity is stored in the columns and the
+  // last-entity (the one that is swapped)
+  std::pair<size_t, std::optional<Entity>> swapAndPopColsInto(Entity e, size_t row,
+                                               Archetype &oAt) {
     ZoneScoped;
     assert(entities.size() > 0);
-
-    size_t index = entityColumnMap[e];
 
     // copy each column that exists on the target archetype over
     for (size_t i = 0; i < columns.size(); ++i) {
       auto it = oAt.compColumnMap.find(columns[i].compId);
       if (it != oAt.compColumnMap.end()) {
         size_t oColIndex = it->second;
-        columns[i].swapAndPopInto(index, oAt.columns[oColIndex]);
+        columns[i].swapAndPopInto(row, oAt.columns[oColIndex]);
       } else {
-        columns[i].removeAt(index);
+        columns[i].removeAt(row);
       }
     }
 
-    removeEntityAt(e, index);
+    auto lastEntityOpt = removeEntityAt(row);
 
-    oAt.addEntity(e);
+    return {oAt.addEntity(e), lastEntityOpt};
   }
 
   // only for debugging, checks if the archetype is valid
@@ -208,25 +206,21 @@ public:
   template <typename... Components, typename F> void eachEntity(F &&func) {
     ZoneScoped;
 
-    auto componentIters = std::tuple {
-      getColumnIterator<Components>()...
-    };
+    auto componentIters = std::tuple{getColumnIterator<Components>()...};
 
     // NOTE: we assume that entities and columns are structured in the same way
     // i.e. entity on index 2 has column data for each column at index 2
     for (size_t i = 0; i < entities.size(); ++i) {
       Entity e = entities[i];
-      
-      std::apply ([&](auto &...iters) {
-        func(e, iters.getAndNext()...);
-      }, componentIters);
+
+      std::apply([&](auto &...iters) { func(e, iters.getAndNext()...); },
+                 componentIters);
     }
   }
 
 private:
   ComponentMask mask;
   std::unordered_map<ComponentID, ColumnIndex> compColumnMap;
-  std::unordered_map<Entity, ColumnIndex> entityColumnMap;
   std::vector<Entity> entities;
   std::vector<Column> columns;
 
@@ -240,20 +234,22 @@ private:
     compColumnMap.emplace(id, static_cast<ColumnIndex>(columns.size() - 1));
   }
 
-
-  void removeEntityAt(Entity e, size_t index) {
+  // remove the entity from this archetype
+  std::optional<Entity> removeEntityAt(size_t index) {
     ZoneScoped;
-    // remove the entity from this archetype
-    entityColumnMap.erase(e);
+
+    std::optional<Entity> moved;
 
     // if the entity being removed is not the last entity, move the last entity
     // into its place (swap and pop)
     if (index + 1 < entities.size()) {
       Entity lastEntity = entities.back();
-      entityColumnMap[lastEntity] = index;
       entities[index] = lastEntity;
+
+      moved = lastEntity;
     }
     entities.pop_back();
 
+    return moved;
   }
 };

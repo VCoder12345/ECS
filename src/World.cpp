@@ -25,12 +25,12 @@ Entity World::genEntityId() {
   if (unusedEntityIds.size() > 0) {
     newEntity.index = unusedEntityIds.back();
     unusedEntityIds.pop_back();
-    entityToAtIdMap[newEntity.index] = 0;
+    entityToAtIdMap[newEntity.index] = {0,0};
   } else {
     newEntity.index = counter;
     ++counter;
     // TODO: check if counter < MAX_ENTITIES
-    entityToAtIdMap.push_back(0);
+    entityToAtIdMap.push_back({0,0});
     entityGenerations.push_back(0);
   }
 
@@ -41,7 +41,8 @@ Entity World::genEntityId() {
 
 void World::materializeEntity(Entity e) {
   // let the entity be part of the empty archetype
-  archetypes[0].addEntity(e);
+  size_t row = archetypes[0].addEntity(e);
+  entityToAtIdMap[e.index] = {0, row};
 }
 
 // Remove an entity from the world, returning its id to the pool of unused ids
@@ -50,17 +51,34 @@ void World::removeEntity(Entity e) {
   unusedEntityIds.push_back(e.index);
   entityGenerations[e.index]++; // increment generation to invalidate old
                                 // references
+  
+  EntityRecord& record = entityToAtIdMap[e.index];
+  auto lastEntity = archetypes[record.archetypeId].removeEntity(record.row);
 
-  getArchetypeForEntity(e).removeEntity(e);
 
-  entityToAtIdMap[e.index] = 0;
+  if (lastEntity.has_value()) {
+    entityToAtIdMap[lastEntity.value().index].row = record.row;
+  }
+
+  entityToAtIdMap[e.index] = {0,0};
 }
 bool World::isAlive(Entity e) const {
   return e.index < entityGenerations.size() &&
          entityGenerations[e.index] == e.generation;
 }
-
 Archetype &World::getArchetypeForEntity(Entity e) {
-  size_t atId = entityToAtIdMap[e.index];
-  return archetypes[atId];
+  const EntityRecord &rec = entityToAtIdMap[e.index];
+  return archetypes[rec.archetypeId];
+}
+
+void World::moveEntityToNewAt(Entity e, EntityRecord &record, size_t newAtId) {
+  auto [newRow, lastEntity] = archetypes[record.archetypeId].swapAndPopColsInto(
+      e, record.row, archetypes[newAtId]);
+
+  if (lastEntity.has_value()) {
+    entityToAtIdMap[lastEntity.value().index].row = record.row;
+  }
+
+  record.archetypeId = newAtId;
+  record.row = newRow;
 }

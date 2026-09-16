@@ -6,6 +6,11 @@
 
 #include <ecs/Profiling.h>
 
+struct EntityRecord {
+  size_t archetypeId;
+  size_t row;
+};
+
 // TODO: delete empty archetypes?
 
 class World {
@@ -23,8 +28,9 @@ public:
 
   template <typename T> T &getComponent(Entity e) {
     assert(isAlive(e));
-    Archetype &at = getArchetypeForEntity(e);
-    return at.getComponent<T>(e);
+    EntityRecord& record = entityToAtIdMap[e.index];
+    Archetype &at = archetypes[record.archetypeId];
+    return at.getComponent<T>(record.row);
   }
 
   // add a component to an entity, moving it to the correct archetype
@@ -32,8 +38,8 @@ public:
   T &addComponent(Entity e, Args &&...args) {
     ZoneScoped;
     assert(isAlive(e));
-    size_t oldAtId = entityToAtIdMap[e.index];
-    const ComponentMask &oldMask = archetypes[oldAtId].getMask();
+    EntityRecord& record = entityToAtIdMap[e.index];
+    const ComponentMask &oldMask = archetypes[record.archetypeId].getMask();
     ComponentMask newMask(oldMask);
     newMask.set(getComponentID<T>());
 
@@ -43,7 +49,7 @@ public:
     size_t newAtId;
     if (it == maskToAtIdMap.end()) {
       // the archetype doesn't exist yet
-      archetypes.emplace_back(archetypes[oldAtId].createAndAddComp<T>(newMask));
+      archetypes.emplace_back(archetypes[record.archetypeId].createAndAddComp<T>(newMask));
       newAtId = archetypes.size() - 1;
       maskToAtIdMap.insert({newMask, newAtId});
     } else {
@@ -51,22 +57,20 @@ public:
       newAtId = it->second;
     }
 
-    // move data from the old archetype to the new one
-    archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
-
-    entityToAtIdMap[e.index] = newAtId;
+    moveEntityToNewAt(e, record, newAtId);
 
     // add the new component to the new archetype
     return archetypes[newAtId].addDataToColumn<T>(std::forward<Args>(args)...);
   }
+
 
   // remove a component from an entity, moving it to the correct archetype
   template <typename T> void removeComponent(Entity e) {
     ZoneScoped;
 
     assert(isAlive(e));
-    size_t oldAtId = entityToAtIdMap[e.index];
-    const ComponentMask &oldMask = archetypes[oldAtId].getMask();
+    EntityRecord& record = entityToAtIdMap[e.index];
+    const ComponentMask &oldMask = archetypes[record.archetypeId].getMask();
     ComponentMask newMask(oldMask);
     ComponentID compId = getComponentID<T>();
     newMask.reset(compId);
@@ -79,7 +83,7 @@ public:
     if (it == maskToAtIdMap.end()) {
       // the archetype doesn't exist yet
       archetypes.emplace_back(
-          archetypes[oldAtId].createAndRemoveComp(newMask, compId));
+          archetypes[record.archetypeId].createAndRemoveComp(newMask, compId));
       newAtId = archetypes.size() - 1;
       maskToAtIdMap.insert({newMask, newAtId});
     } else {
@@ -87,9 +91,7 @@ public:
       newAtId = it->second;
     }
 
-    archetypes[oldAtId].swapAndPopColsInto(e, archetypes[newAtId]);
-
-    entityToAtIdMap[e.index] = newAtId;
+    moveEntityToNewAt(e, record, newAtId);
   }
 
   Archetype &getArchetypeForEntity(Entity e);
@@ -109,18 +111,19 @@ public:
   }
 
   template <typename T> bool hasComponent(Entity e) {
-    Archetype &at = getArchetypeForEntity(e);
-    return at.getMask().test(getComponentID<T>());
+    return getArchetypeForEntity(e).getMask().test(getComponentID<T>());
   }
 
 private:
   // Note that the first archetype (index=0) is always an empty archetype
   std::vector<Archetype> archetypes;
   std::unordered_map<ComponentMask, size_t> maskToAtIdMap;
-  std::vector<size_t> entityToAtIdMap;
+  std::vector<EntityRecord> entityToAtIdMap;
 
   int counter = 0;
 
   std::vector<EntityIndex> unusedEntityIds;
   std::vector<uint32_t> entityGenerations;
+
+  void moveEntityToNewAt(Entity e, EntityRecord &record, size_t newAtId);
 };
