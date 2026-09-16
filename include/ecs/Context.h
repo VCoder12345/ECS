@@ -6,12 +6,15 @@
 #include <unordered_map>
 #include <vector>
 
+// Interface for a queue of component operations to erase their type.
 class ICompQueue {
 public:
   virtual void flush(World &) = 0;
   virtual ~ICompQueue() = default;
 };
 
+// Queue for adding/removing components of type T. This is used to batch
+// operations on components
 template <typename T> class CompQueue : public ICompQueue {
 public:
   std::vector<std::pair<Entity, T>> addQueue;
@@ -30,18 +33,19 @@ public:
   }
 };
 
+// Context for creating and destroying entities and adding/removing components
+// within a world in deferred way. This is useful for batching operations and
+// avoiding modifying the world while iterating over it.
 class WorldCtxt {
 public:
-  Entity createEntity(World &world) { 
+  Entity createEntity(World &world) {
     Entity e = world.genEntityId();
 
     createQueue.push_back(e);
     return e;
   }
 
-  void destroyEntity(Entity e) {
-    removeQueue.push_back(e);
-  }
+  void destroyEntity(Entity e) { removeQueue.push_back(e); }
 
   template <typename T> void removeComponent(Entity e) {
     getAddQueue<T>().removeQueue.push_back(e);
@@ -52,7 +56,9 @@ public:
     getAddQueue<T>().addQueue.emplace_back(e, T(std::forward<Args>(args)...));
   }
 
+  // Flush all queued operations to the world
   void flush(World &world) {
+    ZoneScoped;
     for (Entity e : createQueue) {
       world.materializeEntity(e);
     }
@@ -72,6 +78,8 @@ private:
   std::vector<Entity> createQueue;
   std::vector<Entity> removeQueue;
 
+  // Get the queue for adding/removing components of type T. If it doesn't
+  // exist, create it.
   template <typename T> CompQueue<T> &getAddQueue() {
     ComponentID id = getComponentID<T>();
     auto it = compQueues.find(id);

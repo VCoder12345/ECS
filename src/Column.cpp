@@ -1,3 +1,4 @@
+#include "ecs/Profiling.h"
 #include <ecs/Column.h>
 
 Column::Column(Column &&other) noexcept
@@ -35,6 +36,7 @@ Column Column::copyStructureToEmptyColumn() const {
 }
 
 void Column::swapAndPopInto(size_t index, Column &oCol) {
+  ZoneScoped;
   assert(data != nullptr && oCol.data != nullptr);
   assert(index < size && size > 0);
 
@@ -49,6 +51,7 @@ void Column::swapAndPopInto(size_t index, Column &oCol) {
 }
 
 void Column::removeAt(size_t index) {
+  ZoneScoped;
   assert(index < size);
   assert(size > 0);
 

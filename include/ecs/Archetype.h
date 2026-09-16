@@ -242,6 +242,7 @@ private:
 
 
   void removeEntityAt(Entity e, size_t index) {
+    ZoneScoped;
     // remove the entity from this archetype
     entityColumnMap.erase(e);
 

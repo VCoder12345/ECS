@@ -1,4 +1,5 @@
 #pragma once
+#include "ecs/Profiling.h"
 #include <ecs/Context.h>
 #include <ecs/World.h>
 
@@ -7,6 +8,7 @@
 //Note that nested eachDeferred's will lead to undefined behaviour
 template <typename... Components, typename F>
 void eachDeferred(World &world, F &&func) {
+  ZoneScoped;
   WorldCtxt ctx;
   world.each<Components...>(
       [&](Entity e, auto &...comps) { func(ctx, e, comps...); });
