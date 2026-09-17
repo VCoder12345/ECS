@@ -28,9 +28,24 @@ public:
 
   template <typename T> T &getComponent(Entity e) {
     assert(isAlive(e));
-    EntityRecord& record = entityToAtIdMap[e.index];
+    EntityRecord &record = entityToAtIdMap[e.index];
     Archetype &at = archetypes[record.archetypeId];
     return at.getComponent<T>(record.row);
+  }
+
+  size_t createArchetype(Archetype &&at, const ComponentMask &mask) {
+    archetypes.emplace_back(std::move(at));
+    size_t atId = archetypes.size() - 1;
+    maskToAtIdMap.insert({mask, atId});
+
+    //update queryCache
+    for(auto &[queryMask, matches] : queryCache) {
+      if ((mask & queryMask) == queryMask) {
+        matches.push_back(atId);
+      }
+    }
+
+    return atId;
   }
 
   // add a component to an entity, moving it to the correct archetype
@@ -38,7 +53,7 @@ public:
   T &addComponent(Entity e, Args &&...args) {
     ZoneScoped;
     assert(isAlive(e));
-    EntityRecord& record = entityToAtIdMap[e.index];
+    EntityRecord &record = entityToAtIdMap[e.index];
     const ComponentMask &oldMask = archetypes[record.archetypeId].getMask();
     ComponentMask newMask(oldMask);
     newMask.set(getComponentID<T>());
@@ -49,9 +64,8 @@ public:
     size_t newAtId;
     if (it == maskToAtIdMap.end()) {
       // the archetype doesn't exist yet
-      archetypes.emplace_back(archetypes[record.archetypeId].createAndAddComp<T>(newMask));
-      newAtId = archetypes.size() - 1;
-      maskToAtIdMap.insert({newMask, newAtId});
+      newAtId = createArchetype(
+          archetypes[record.archetypeId].createAndAddComp<T>(newMask), newMask);
     } else {
       // the archetype already exists
       newAtId = it->second;
@@ -63,13 +77,12 @@ public:
     return archetypes[newAtId].addDataToColumn<T>(std::forward<Args>(args)...);
   }
 
-
   // remove a component from an entity, moving it to the correct archetype
   template <typename T> void removeComponent(Entity e) {
     ZoneScoped;
 
     assert(isAlive(e));
-    EntityRecord& record = entityToAtIdMap[e.index];
+    EntityRecord &record = entityToAtIdMap[e.index];
     const ComponentMask &oldMask = archetypes[record.archetypeId].getMask();
     ComponentMask newMask(oldMask);
     ComponentID compId = getComponentID<T>();
@@ -82,10 +95,9 @@ public:
     size_t newAtId;
     if (it == maskToAtIdMap.end()) {
       // the archetype doesn't exist yet
-      archetypes.emplace_back(
-          archetypes[record.archetypeId].createAndRemoveComp(newMask, compId));
-      newAtId = archetypes.size() - 1;
-      maskToAtIdMap.insert({newMask, newAtId});
+      newAtId = createArchetype(
+          archetypes[record.archetypeId].createAndRemoveComp(newMask, compId),
+          newMask);
     } else {
       // the archetype already exists
       newAtId = it->second;
@@ -101,12 +113,30 @@ public:
     ComponentMask requiredMask;
     (requiredMask.set(getComponentID<Components>()), ...);
 
-    for (Archetype &arch : archetypes) {
-      // does the archetype have the required components?
-      if ((arch.getMask() & requiredMask) != requiredMask)
-        continue;
+    auto it = queryCache.find(requiredMask);
 
-      arch.eachEntity<Components...>(std::forward<F>(func));
+    if (it == queryCache.end()) {
+      // it's not yet in the cache, so we look for the corresponding archetypes
+      // and cache them
+      std::vector<size_t> foundAts;
+      for (size_t i = 0; i < archetypes.size(); ++i) {
+        Archetype &arch = archetypes[i];
+        // does the archetype have the required components?
+        if ((arch.getMask() & requiredMask) != requiredMask)
+          continue;
+
+        foundAts.push_back(i);
+
+        arch.eachEntity<Components...>(std::forward<F>(func));
+      }
+
+      queryCache.emplace(std::move(requiredMask), std::move(foundAts));
+    } else {
+      // it is already in the cache, so we just iterate over the cached
+      // archetypes
+      for (size_t i : it->second) {
+        archetypes[i].eachEntity<Components...>(std::forward<F>(func));
+      }
     }
   }
 
@@ -124,6 +154,8 @@ private:
 
   std::vector<EntityIndex> unusedEntityIds;
   std::vector<uint32_t> entityGenerations;
+  // maps a componentMask for a query to all the relevant archetype ids
+  std::unordered_map<ComponentMask, std::vector<size_t>> queryCache;
 
   void moveEntityToNewAt(Entity e, EntityRecord &record, size_t newAtId);
 };
